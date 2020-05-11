@@ -9,6 +9,30 @@ from perfsom.minisom import MiniSom, asymptotic_decay, fast_norm
 
 DEFAULT_CAPACITY = 4587520
 
+add_a_and_b_over_c = cp.ElementwiseKernel(
+    'T a, T b, T c',
+    'T y',
+    'y = a + b/c',
+    'divide_sum')
+
+calc_update = cp.ReductionKernel(
+    'T x, T w, T g',
+    'T y',
+    '(x - w) * g',
+    'a + b',
+    'y = a',
+    '0',
+    'calc_update')
+
+dist2_sq = cp.ReductionKernel(
+    'T x, T y',
+    'T z',
+    '(x - y) * (x - y)',
+    'a + b',
+    'z = a',
+    '0',
+    'dist2_sq')
+
 def ravel_idx_2d(idx, cols):
     return idx[0] * cols + idx[1]
 
@@ -44,11 +68,10 @@ class CupySom(MiniSom):
         if len(x_gpu.shape) == 1:
             x_gpu = cp.expand_dims(x_gpu, axis=1)
 
-        s_gpu = cp.subtract(x_gpu[:,cp.newaxis,cp.newaxis,:], self._weights_gpu[cp.newaxis,:,:,:])  # x - w
-
-        #s_gpu[~cp.isfinite(s_gpu)] = 0
-
-        self._activation_map_gpu = cp.linalg.norm(s_gpu, axis=3)
+        self._activation_map_gpu = dist2_sq(
+                x_gpu[:,cp.newaxis,cp.newaxis,:], 
+                self._weights_gpu[cp.newaxis,:,:,:], 
+                axis=3)
 
 
     def activate(self, x):
@@ -160,15 +183,19 @@ class CupySom(MiniSom):
         # # Same as assigning 0 to masked values NB: need to negate condition!
         # g_gpu *= (g_gpu >= self._neigh_threshold * mins[:,cp.newaxis, cp.newaxis])
 
-        g_gpu = g_gpu[:,:,:,cp.newaxis]  # prepare for broadcast
-        x_w_all_gpu = x_gpu[:,cp.newaxis,cp.newaxis,:] - self._weights_gpu[cp.newaxis,:,:,:]
-        self._numerator_gpu   += cp.sum(cp.multiply(g_gpu, x_w_all_gpu), axis=0)
-        self._denominator_gpu += cp.sum(g_gpu, axis=0)
+        self._numerator_gpu += calc_update(
+                x_gpu[:,cp.newaxis,cp.newaxis,:],
+                self._weights_gpu[cp.newaxis,:,:,:],
+                g_gpu[:,:,:,cp.newaxis],
+                axis=0
+        )
+
+        self._denominator_gpu += cp.sum(g_gpu, axis=0)[:,:,cp.newaxis]
 
 
     def merge_updates(self):
-        self._denominator_gpu[self._denominator_gpu == 0] = 1   # no div0
-        self._weights_gpu += cp.divide(self._numerator_gpu, self._denominator_gpu)
+        # self._denominator_gpu[self._denominator_gpu == 0] = 1   # no div0
+        self._weights_gpu = add_a_and_b_over_c(self._weights_gpu, self._numerator_gpu, self._denominator_gpu)
         if self._normalizeWeights:
             norms_gpu = cp.linalg.norm(self._weights_gpu, axis=2)
             norms_gpu[norms_gpu == 0] = 1   # Avoid divide by zero
