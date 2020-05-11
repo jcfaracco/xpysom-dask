@@ -206,10 +206,7 @@ class CupySom(MiniSom):
             iter_end = num_iteration
 
         # Copy arrays to device
-        if self._weights_gpu is None:
-            self._weights_gpu = cp.asarray(self._weights, dtype=cp.float32)
-            self._weights_gpu = cp.transpose(self._weights_gpu, axes=(2,0,1))
-
+        self._weights_gpu = cp.transpose(cp.asarray(self._weights, dtype=cp.float32), axes=(2,0,1))
         data_gpu = cp.transpose(cp.asarray(data, dtype=cp.float32), axes=(1,0))
 
         batch_size = len(data)
