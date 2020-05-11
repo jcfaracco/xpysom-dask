@@ -35,8 +35,8 @@ class CupySom(MiniSom):
 
         self._normalizeWeights = False
 
-        self._neigx = cp.arange(x)
-        self._neigy = cp.arange(y) 
+        self._neigx = cp.arange(x, dtype=cp.float32)
+        self._neigy = cp.arange(y, dtype=cp.float32) 
 
     def _activate(self, x_gpu):
         """Updates matrix activation_map, in this matrix
@@ -69,10 +69,10 @@ class CupySom(MiniSom):
         x = self._weights.shape[0]
         y = self._weights.shape[1]
 
-        nx = cp.arange(x).reshape((1,x))
-        ny = cp.arange(y).reshape((1,y))
-        cx = cp.arange(x).reshape((x,1))
-        cy = cp.arange(y).reshape((y,1))
+        nx = cp.arange(x, dtype=cp.float32).reshape((1,x))
+        ny = cp.arange(y, dtype=cp.float32).reshape((1,y))
+        cx = cp.arange(x, dtype=cp.float32).reshape((x,1))
+        cy = cp.arange(y, dtype=cp.float32).reshape((y,1))
 
         # Precompute ax and ay so I will only have to ^(1/d) to calculate
         # "real" ax and ay
