@@ -123,8 +123,7 @@ class CupySom(MiniSom):
         # Manca il controllo sulla finitezza
 
         self._activate(x_gpu)
-        shape = self._activation_map_gpu.shape
-        raveled_idxs = self._activation_map_gpu.reshape((shape[0], shape[1]*shape[2])).argmin(axis=1)
+        raveled_idxs = self._activation_map_gpu.argmin(axis=(1,2))
         return (self._unravel_precomputed[0][raveled_idxs], self._unravel_precomputed[1][raveled_idxs])
 
     def winner(self, x):
