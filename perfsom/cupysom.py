@@ -15,12 +15,6 @@ def find_cuda_cores():
         print("Could not infer #cuda_cores")
         return 0
 
-add_a_and_b_over_c = cp.ElementwiseKernel(
-    'T a, T b, T c',
-    'T y',
-    'y = a + b/c',
-    'divide_sum')
-
 calc_update = cp.ReductionKernel(
     'T x, T w, T g',
     'T y',
@@ -166,7 +160,7 @@ class CupySom(MiniSom):
 
     def merge_updates(self):
         # self._denominator_gpu[self._denominator_gpu == 0] = 1   # no div0
-        self._weights_gpu = add_a_and_b_over_c(self._weights_gpu, self._numerator_gpu, self._denominator_gpu)
+        self._weights_gpu +=  self._numerator_gpu / self._denominator_gpu
         if self._normalizeWeights:
             norms_gpu = cp.linalg.norm(self._weights_gpu, axis=2)
             norms_gpu[norms_gpu == 0] = 1   # Avoid divide by zero
