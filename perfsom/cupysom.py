@@ -15,15 +15,6 @@ def find_cuda_cores():
         print("Could not infer #cuda_cores")
         return 0
 
-calc_update = cp.ReductionKernel(
-    'T x, T w, T g',
-    'T y',
-    '(x - w) * g',
-    'a + b',
-    'y = a',
-    '0',
-    'calc_update')
-
 def l2dist_squared(x, w):
     """Calculate L2 distance
 
