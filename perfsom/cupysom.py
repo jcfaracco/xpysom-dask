@@ -7,6 +7,9 @@ import cupy as cp
 
 from perfsom.minisom import MiniSom, asymptotic_decay, fast_norm, print_progress
 
+# In my GPU it looks like this is the best performance/memory trade-off
+DEFAULT_CORE_OVERSUBSCRIPTION = 4
+
 def find_cuda_cores():
     try:
         import subprocess
@@ -38,8 +41,8 @@ class CupySom(MiniSom):
         super().__init__(x, y, input_len, sigma=sigma, learning_rate=learning_rate, decay_function=decay_function, neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=random_seed)
 
         if n_parallel == 0:
-            n_parallel = find_cuda_cores()//2    # In my GPU it looks like this is the best performance/memory trade-off
-            
+            n_parallel = find_cuda_cores()*DEFAULT_CORE_OVERSUBSCRIPTION    
+ 
             if n_parallel == 0:
                 raise ValueError("n_parallel was not specified and could not be infered from system")
         
