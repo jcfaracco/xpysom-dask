@@ -30,14 +30,14 @@ calc_update = cp.ReductionKernel(
     '0',
     'calc_update')
 
-dist2_sq = cp.ReductionKernel(
+l2dist_squared = cp.ReductionKernel(
     'T x, T y',
     'T z',
     '(x - y) * (x - y)',
     'a + b',
     'z = a',
     '0',
-    'dist2_sq')
+    'l2dist_squared')
 
 def ravel_idx_2d(idx, cols):
     return idx[0] * cols + idx[1]
@@ -46,8 +46,9 @@ def unravel_idx_2d(i, cols):
     return (i % cols, cp.floor_divide(i, cols))
 
 class CupySom(MiniSom):
-    def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5, decay_function=asymptotic_decay, neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=None, n_parallel=0):
-        super().__init__(x, y, input_len, sigma=sigma, learning_rate=learning_rate, decay_function=decay_function, neighborhood_function=neighborhood_function, topology=topology, activation_distance=activation_distance, random_seed=random_seed)
+    def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5, decay_function='exponential', neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=None, n_parallel=0):
+        # passing some mock parameters to disable checks
+        super().__init__(x, y, input_len, sigma=sigma, learning_rate=learning_rate, decay_function=decay_function, neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=random_seed)
 
         if n_parallel == 0:
             n_parallel = find_cuda_cores()//2    # In my GPU it looks like this is the best performance/memory trade-off
@@ -56,11 +57,37 @@ class CupySom(MiniSom):
                 raise ValueError("n_parallel was not specified and could not be infered from system")
         
         self._n_parallel = n_parallel
-        
-        self._precompute_gaussian()
+
+        if topology not in ['rectangular']:
+            msg = '%s not supported only rectangular available'
+            raise ValueError(msg % topology)
+
+        neig_functions = {
+            'gaussian': self._gaussian,
+            'gaussian_precomputed': self._gaussian_precomputed,
+        }
+
+        if neighborhood_function not in neig_functions:
+            msg = '%s not supported. Functions available: %s'
+            raise ValueError(msg % (neighborhood_function,
+                                    ', '.join(neig_functions.keys())))
+
+        self.neighborhood = neig_functions[neighborhood_function]
+
+        if neighborhood_function == 'gaussian_precomputed':
+            self._precompute_gaussian()
+
+        distance_functions = {'euclidean': l2dist_squared}
+
+        if activation_distance not in distance_functions:
+            msg = '%s not supported. Distances available: %s'
+            raise ValueError(msg % (activation_distance,
+                                    ', '.join(distance_functions.keys())))
+
+        self._activation_distance = distance_functions[activation_distance]
 
         # print("Using n_parallel = " + str(self._n_parallel))
-        self._unravel_precomputed = cp.unravel_index(cp.arange(x*y), (x,y))
+        self._unravel_precomputed = cp.unravel_index(cp.arange(x*y, dtype=cp.int64), (x,y))
         self._weights_gpu = None
 
         self._normalizeWeights = False
@@ -74,19 +101,10 @@ class CupySom(MiniSom):
         if len(x_gpu.shape) == 1:
             x_gpu = cp.expand_dims(x_gpu, axis=1)
 
-        self._activation_map_gpu = dist2_sq(
+        self._activation_map_gpu = self._activation_distance(
                 x_gpu[:,:,cp.newaxis,cp.newaxis], 
                 self._weights_gpu[:,cp.newaxis,:,:], 
                 axis=0)
-
-
-    def activate(self, x):
-        """Returns the activation map to x"""
-        x_gpu = cp.asarray(x)
-
-        self._activate(x_gpu)
-        self._activation_map = cp.asnumpy(self._activation_map_gpu)
-        return self._activation_map
 
     # I tried to speed up gaussian function, which takes 15% of the overall
     # execution time, by precalculating some parts and caching others but
@@ -138,8 +156,8 @@ class CupySom(MiniSom):
         cx = c[0][:,cp.newaxis]
         cy = c[1][:,cp.newaxis]
 
-        ax = cp.exp(-cp.power(nx-cx, 2)/d)
-        ay = cp.exp(-cp.power(ny-cy, 2)/d)
+        ax = cp.exp(-cp.power(nx-cx, 2, dtype=cp.float32)/d)
+        ay = cp.exp(-cp.power(ny-cy, 2, dtype=cp.float32)/d)
         return ax[:,:,cp.newaxis]*ay[:,cp.newaxis,:]
 
     def _winner(self, x_gpu):
@@ -152,16 +170,6 @@ class CupySom(MiniSom):
         self._activate(x_gpu)
         raveled_idxs = self._activation_map_gpu.argmin(axis=(1,2))
         return (self._unravel_precomputed[0][raveled_idxs], self._unravel_precomputed[1][raveled_idxs])
-
-    def winner(self, x):
-        """Computes the coordinates of the winning neuron for the sample x"""
-
-        if not np.any(np.isfinite(x)):
-            return None
-        s = np.subtract(x, self._weights)  # x - w
-        self._activation_map = np.linalg.norm(s, axis=2)
-        return np.unravel_index(self._activation_map.argmin(),
-                 self._activation_map.shape)
 
     def update(self, x_gpu, wins, eta, sig):
         """Updates the weights of the neurons.
@@ -180,7 +188,7 @@ class CupySom(MiniSom):
         # wins = cp.unravel_index(wins_raveled, self._activation_map_gpu.shape)
 
         # improves the performances
-        g_gpu = self._gaussian_precomputed(wins, sig)*eta
+        g_gpu = self.neighborhood(wins, sig)*eta
 
         # idx = cp.arange(g_gpu.shape[0]) * (g_gpu.shape[1]*g_gpu.shape[2]) + wins[0] * g_gpu.shape[2] + wins[1]
         # mins = g_gpu.ravel()[idx]
