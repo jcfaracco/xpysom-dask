@@ -43,3 +43,13 @@ nosetests.xml
 # Notebooks checkpoints
 examples/.ipynb_checkpoints/
 
+.venv
+__pycache__
+.vscode
+
+#Results
+*.csv
+
+# local trials
+prova_*
+
