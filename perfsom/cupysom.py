@@ -5,7 +5,7 @@ from warnings import warn
 import numpy as np
 import cupy as cp
 
-from perfsom.minisom import MiniSom, asymptotic_decay, fast_norm
+from perfsom.minisom import MiniSom, asymptotic_decay, fast_norm, print_progress
 
 def find_cuda_cores():
     try:
@@ -226,14 +226,11 @@ class CupySom(MiniSom):
         batch_size = len(data)
         setIdx = np.arange(ceil(len(data)/self._n_parallel))
         currIdx = 0
-        perc = -1
-        for iteration in range(iter_beg, iter_end):
-            if verbose:
-                new_perc = int(100 * iteration / num_iteration)
-                if new_perc > perc:
-                    print("Training [" + str(new_perc) + "%]...")
-                    perc = new_perc
+        
+        if verbose:
+            print_progress(-1, num_iteration*len(data))
 
+        for iteration in range(iter_beg, iter_end):
             self._numerator_gpu   = cp.zeros(self._weights_gpu.shape, dtype=cp.float32)
             self._denominator_gpu = cp.zeros((1, self._weights_gpu.shape[1], self._weights_gpu.shape[2]), dtype=cp.float32)
 
@@ -248,6 +245,11 @@ class CupySom(MiniSom):
                     end = len(data)
                 self.update(data_gpu[:,start:end], self._winner(data_gpu[:,start:end]), eta, sig)
                 currIdx = (currIdx + 1) % len(setIdx)
+                if verbose:
+                    print_progress(
+                        iteration*len(data)+end-1, 
+                        num_iteration*len(data)
+                    )
             self.merge_updates()
 
         # Copy back arrays to host
