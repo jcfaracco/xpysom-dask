@@ -30,14 +30,16 @@ calc_update = cp.ReductionKernel(
     '0',
     'calc_update')
 
-l2dist_squared = cp.ReductionKernel(
-    'T x, T y',
-    'T z',
-    '(x - y) * (x - y)',
-    'a + b',
-    'z = a',
-    '0',
-    'l2dist_squared')
+def l2dist_squared(x, w):
+    """Calculate L2 distance
+
+    NB: result shape is (N,X*Y)
+    """
+    w_flat = w.reshape(-1, w.shape[2])
+    x_sq = cp.power(x, 2).sum(axis=1, keepdims=True)
+    w_flat_sq = cp.power(w_flat, 2).sum(axis=1, keepdims=True)
+    cross_term = cp.dot(x, w_flat.T)
+    return -2 * cross_term + x_sq + w_flat_sq.T
 
 def ravel_idx_2d(idx, cols):
     return idx[0] * cols + idx[1]
@@ -77,7 +79,9 @@ class CupySom(MiniSom):
         if neighborhood_function == 'gaussian_precomputed':
             self._precompute_gaussian()
 
-        distance_functions = {'euclidean': l2dist_squared}
+        distance_functions = {
+            'euclidean': l2dist_squared,
+        }
 
         if activation_distance not in distance_functions:
             msg = '%s not supported. Distances available: %s'
@@ -102,9 +106,9 @@ class CupySom(MiniSom):
             x_gpu = cp.expand_dims(x_gpu, axis=1)
 
         self._activation_map_gpu = self._activation_distance(
-                x_gpu[:,:,cp.newaxis,cp.newaxis], 
-                self._weights_gpu[:,cp.newaxis,:,:], 
-                axis=0)
+                x_gpu, 
+                self._weights_gpu
+        )
 
     # I tried to speed up gaussian function, which takes 15% of the overall
     # execution time, by precalculating some parts and caching others but
@@ -168,7 +172,7 @@ class CupySom(MiniSom):
         # Manca il controllo sulla finitezza
 
         self._activate(x_gpu)
-        raveled_idxs = self._activation_map_gpu.argmin(axis=(1,2))
+        raveled_idxs = self._activation_map_gpu.argmin(axis=1)
         return (self._unravel_precomputed[0][raveled_idxs], self._unravel_precomputed[1][raveled_idxs])
 
     def update(self, x_gpu, wins, eta, sig):
@@ -196,13 +200,13 @@ class CupySom(MiniSom):
         # g_gpu *= (g_gpu >= self._neigh_threshold * mins[:,cp.newaxis, cp.newaxis])
 
         self._numerator_gpu += calc_update(
-                x_gpu[:,:,cp.newaxis,cp.newaxis],
-                self._weights_gpu[:,cp.newaxis,:,:],
-                g_gpu[cp.newaxis,:,:,:],
-                axis=1
+                x_gpu[:,cp.newaxis,cp.newaxis,:],
+                self._weights_gpu[cp.newaxis,:,:,:],
+                g_gpu[:,:,:,cp.newaxis],
+                axis=0
         )
 
-        self._denominator_gpu += cp.sum(g_gpu, axis=0)[cp.newaxis,:,:]
+        self._denominator_gpu += cp.sum(g_gpu, axis=0)[:,:,cp.newaxis]
 
 
     def merge_updates(self):
@@ -220,8 +224,8 @@ class CupySom(MiniSom):
             iter_end = num_iteration
 
         # Copy arrays to device
-        self._weights_gpu = cp.transpose(cp.asarray(self._weights, dtype=cp.float32), axes=(2,0,1))
-        data_gpu = cp.transpose(cp.asarray(data, dtype=cp.float32), axes=(1,0))
+        self._weights_gpu = cp.asarray(self._weights, dtype=cp.float32)
+        data_gpu = cp.asarray(data, dtype=cp.float32)
 
         batch_size = len(data)
         setIdx = np.arange(ceil(len(data)/self._n_parallel))
@@ -232,7 +236,7 @@ class CupySom(MiniSom):
 
         for iteration in range(iter_beg, iter_end):
             self._numerator_gpu   = cp.zeros(self._weights_gpu.shape, dtype=cp.float32)
-            self._denominator_gpu = cp.zeros((1, self._weights_gpu.shape[1], self._weights_gpu.shape[2]), dtype=cp.float32)
+            self._denominator_gpu = cp.zeros((self._weights_gpu.shape[0], self._weights_gpu.shape[1],1), dtype=cp.float32)
 
             eta = self._decay_function(self._learning_rate, iteration, num_iteration)
             # sigma and learning rate decrease with the same rule
@@ -243,7 +247,7 @@ class CupySom(MiniSom):
                 end = start + self._n_parallel
                 if end > len(data):
                     end = len(data)
-                self.update(data_gpu[:,start:end], self._winner(data_gpu[:,start:end]), eta, sig)
+                self.update(data_gpu[start:end], self._winner(data_gpu[start:end]), eta, sig)
                 currIdx = (currIdx + 1) % len(setIdx)
                 if verbose:
                     print_progress(
@@ -253,7 +257,7 @@ class CupySom(MiniSom):
             self.merge_updates()
 
         # Copy back arrays to host
-        self._weights = cp.asnumpy(cp.transpose(self._weights_gpu, axes=(1,2,0)))
+        self._weights = cp.asnumpy(self._weights_gpu)
         
         if verbose:
             print('\n quantization error:', self.quantization_error(data))
