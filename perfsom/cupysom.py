@@ -66,7 +66,6 @@ class CupySom(MiniSom):
 
         neig_functions = {
             'gaussian': self._gaussian,
-            'gaussian_precomputed': self._gaussian_precomputed,
         }
 
         if neighborhood_function not in neig_functions:
@@ -75,9 +74,6 @@ class CupySom(MiniSom):
                                     ', '.join(neig_functions.keys())))
 
         self.neighborhood = neig_functions[neighborhood_function]
-
-        if neighborhood_function == 'gaussian_precomputed':
-            self._precompute_gaussian()
 
         distance_functions = {
             'euclidean': l2dist_squared,
@@ -109,47 +105,6 @@ class CupySom(MiniSom):
                 x_gpu, 
                 self._weights_gpu
         )
-
-    # I tried to speed up gaussian function, which takes 15% of the overall
-    # execution time, by precalculating some parts and caching others but
-    # performance only improved by 3% overall, give or take.
-    # Maybe a lazier approach would be better. But it would have to be iterative.
-
-    def _precompute_gaussian(self):
-        """Returns a Gaussian centered in c"""
-        x = self._weights.shape[0]
-        y = self._weights.shape[1]
-
-        nx = cp.arange(x, dtype=cp.float32).reshape((1,x))
-        ny = cp.arange(y, dtype=cp.float32).reshape((1,y))
-        cx = cp.arange(x, dtype=cp.float32).reshape((x,1))
-        cy = cp.arange(y, dtype=cp.float32).reshape((y,1))
-
-        # Precompute ax and ay so I will only have to ^(1/d) to calculate
-        # "real" ax and ay
-        self._precomputed_ax = cp.exp(-cp.power(nx-cx, 2))
-        self._precomputed_ay = cp.exp(-cp.power(ny-cy, 2))
-
-        self._old_sigma = None
-        i = cp.arange(x*y, dtype=cp.int32)
-        self._idxs_precomputed = unravel_idx_2d(i, x)
-
-    def _gaussian_precomputed(self, c, sigma):
-        x = self._weights.shape[0]
-        y = self._weights.shape[1]
-
-        # If sigma changes, precompute gaussian matrix for every possible winning
-        # vector
-        if sigma != self._old_sigma:
-            self._old_sigma = sigma
-
-            d = 2*np.pi*sigma*sigma
-            ax = cp.power(self._precomputed_ax, 1/d) 
-            ay = cp.power(self._precomputed_ay, 1/d) 
-            self._gaussian_cache = cp.einsum('ij, kl -> ikjl', ax, ay) 
-
-        # Take the winning vectors' precomputed gaussian matrix
-        return self._gaussian_cache[c[0], c[1], :, :]
 
     def _gaussian(self, c, sigma):
         """Returns a Gaussian centered in c"""
