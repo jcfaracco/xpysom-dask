@@ -148,24 +148,28 @@ class CupySom(MiniSom):
         # # Same as assigning 0 to masked values NB: need to negate condition!
         # g_gpu *= (g_gpu >= self._neigh_threshold * mins[:,cp.newaxis, cp.newaxis])
 
-        self._numerator_gpu += calc_update(
-                x_gpu[:,cp.newaxis,cp.newaxis,:],
-                self._weights_gpu[cp.newaxis,:,:,:],
-                g_gpu[:,:,:,cp.newaxis],
-                axis=0
+        sum_g_gpu = cp.sum(g_gpu, axis=0)
+        w_sum_g_gpu = self._weights_gpu * sum_g_gpu[:,:,cp.newaxis]
+
+        sum_xg = cp.dot(
+            g_gpu.reshape(g_gpu.shape[0],g_gpu.shape[1]*g_gpu.shape[2]).T, 
+            x_gpu
         )
 
-        self._denominator_gpu += cp.sum(g_gpu, axis=0)[:,:,cp.newaxis]
+        self._numerator_gpu += sum_xg.reshape(w_sum_g_gpu.shape) - w_sum_g_gpu
+        self._denominator_gpu += sum_g_gpu[:,:,cp.newaxis]
 
 
     def merge_updates(self):
-        # self._denominator_gpu[self._denominator_gpu == 0] = 1   # no div0
-        self._weights_gpu +=  self._numerator_gpu / self._denominator_gpu
+        update = cp.nan_to_num(
+            self._numerator_gpu / self._denominator_gpu
+        )
+        self._weights_gpu += update
         if self._normalizeWeights:
             norms_gpu = cp.linalg.norm(self._weights_gpu, axis=2)
-            norms_gpu[norms_gpu == 0] = 1   # Avoid divide by zero
-            norms_gpu = norms_gpu[:,:,cp.newaxis]  # prepare for broadcast
-            self._weights_gpu = cp.divide(self._weights_gpu, norms_gpu)
+            self._weights_gpu = cp.nan_to_num(
+                self._weights_gpu / norms_gpu[:,:,cp.newaxis]
+            )
 
 
     def train(self, data, num_iteration, iter_beg=0, iter_end=None, verbose=False):
