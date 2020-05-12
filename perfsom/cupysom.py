@@ -7,7 +7,13 @@ import cupy as cp
 
 from perfsom.minisom import MiniSom, asymptotic_decay, fast_norm
 
-DEFAULT_CAPACITY = 4587520
+def find_cuda_cores():
+    try:
+        import subprocess
+        return int(subprocess.check_output("nvidia-settings -q CUDACores -t", shell=True))
+    except:
+        print("Could not infer #cuda_cores")
+        return 0
 
 add_a_and_b_over_c = cp.ElementwiseKernel(
     'T a, T b, T c',
@@ -40,16 +46,16 @@ def unravel_idx_2d(i, cols):
     return (i % cols, cp.floor_divide(i, cols))
 
 class CupySom(MiniSom):
-    def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5, decay_function=asymptotic_decay, neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=None, n_parallel=0, gpu_capacity=DEFAULT_CAPACITY):
+    def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5, decay_function=asymptotic_decay, neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=None, n_parallel=0):
         super().__init__(x, y, input_len, sigma=sigma, learning_rate=learning_rate, decay_function=decay_function, neighborhood_function=neighborhood_function, topology=topology, activation_distance=activation_distance, random_seed=random_seed)
 
         if n_parallel == 0:
-            if gpu_capacity == 0:
-                print("WARN: n_parallel and gpu_capacity can't be both 0! Assuming gpu_capacity = %d" % DEFAULT_CAPACITY)
-                gpu_capacity = DEFAULT_CAPACITY
-            self._n_parallel = ceil(gpu_capacity/(x*y*input_len))
-        else:
-            self._n_parallel = n_parallel
+            n_parallel = find_cuda_cores()//2    # In my GPU it looks like this is the best performance/memory trade-off
+            
+            if n_parallel == 0:
+                raise ValueError("n_parallel was not specified and could not be infered from system")
+        
+        self._n_parallel = n_parallel
         
         self._precompute_gaussian()
 
