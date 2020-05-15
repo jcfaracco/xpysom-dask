@@ -23,10 +23,17 @@ def l2dist_squared(x, w):
 
     NB: result shape is (N,X*Y)
     """
+    finite_mask = cp.isfinite(x)
     w_flat = w.reshape(-1, w.shape[2])
-    x_sq = cp.power(x, 2).sum(axis=1, keepdims=True)
-    w_flat_sq = cp.power(w_flat, 2).sum(axis=1, keepdims=True)
-    cross_term = cp.dot(x, w_flat.T)
+    if cp.all(finite_mask):
+        x_finite = x
+        w_flat_sq = cp.power(w_flat, 2).sum(axis=1, keepdims=True)
+    else:
+        x_finite = cp.nan_to_num(x)
+        w_flat_sq = cp.dot(cp.power(w_flat, 2), finite_mask.T)
+
+    x_sq = cp.power(x_finite, 2).sum(axis=1, keepdims=True)
+    cross_term = cp.dot(x_finite, w_flat.T)
     return -2 * cross_term + x_sq + w_flat_sq.T
 
 def ravel_idx_2d(idx, cols):
