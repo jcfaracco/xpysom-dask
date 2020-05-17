@@ -326,8 +326,8 @@ class TestCupySom(unittest.TestCase):
         print(cs_gauss.shape)
 
         for i in range(len(c[0])):
-            x = np.asscalar(cp.asnumpy(c[0][i]))
-            y = np.asscalar(cp.asnumpy(c[1][i]))
+            x = cp.asnumpy(c[0][i]).item()
+            y = cp.asnumpy(c[1][i]).item()
             ms_gauss = self.minisom._gaussian((x,y), 1)
             np.testing.assert_array_almost_equal(ms_gauss, cs_gauss[i])
 
@@ -356,8 +356,8 @@ class TestCupySomHex(unittest.TestCase):
         print(cs_gauss.shape)
 
         for i in range(len(c[0])):
-            x = np.asscalar(cp.asnumpy(c[0][i]))
-            y = np.asscalar(cp.asnumpy(c[1][i]))
+            x = cp.asnumpy(c[0][i]).item()
+            y = cp.asnumpy(c[1][i]).item()
             print(x,y)
             ms_gauss = self.minisom._gaussian((x,y), 1)
             np.testing.assert_array_almost_equal(ms_gauss, cs_gauss[i])
