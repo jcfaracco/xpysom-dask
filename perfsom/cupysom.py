@@ -1,4 +1,5 @@
 from math import sqrt, ceil
+import unittest
 
 from collections import defaultdict
 from warnings import warn
@@ -231,3 +232,73 @@ class CupySom(MiniSom):
         
         if verbose:
             print('\n quantization error:', self.quantization_error(data))
+
+
+class TestCupySom(unittest.TestCase):
+    def setUp(self):
+        self.som = CupySom(5, 5, 1)
+        self.minisom = MiniSom(5, 5, 1)
+
+        for i in range(5):
+            for j in range(5):
+                # checking weights normalization
+                np.testing.assert_almost_equal(1.0, np.linalg.norm(self.som._weights[i, j]))
+        self.som._weights = np.zeros((5, 5, 1))  # fake weights
+        self.som._weights[2, 3] = 5.0
+        self.som._weights[1, 1] = 2.0
+        
+        np.random.seed(1234)
+        cp.random.seed(1234)
+
+    def test_euclidean_distance(self):
+        x = np.random.rand(100, 20)
+        w = np.random.rand(10,10,20)
+        cs_dist = cp.asnumpy(l2dist_squared(cp.array(x), cp.array(w)))
+        cs_dist = cs_dist.reshape((100,10,10))
+        for i, sample in enumerate(x):
+            ms_dist = self.minisom._euclidean_distance(sample, w)**2
+            np.testing.assert_array_almost_equal(ms_dist, cs_dist[i])
+
+    def test_gaussian(self):
+        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        c = (cx.flatten(), cy.flatten())        
+
+        cs_gauss = cp.asnumpy(self.som._gaussian_rect(c, 1))
+        print(cs_gauss.shape)
+
+        for i in range(len(c[0])):
+            x = np.asscalar(cp.asnumpy(c[0][i]))
+            y = np.asscalar(cp.asnumpy(c[1][i]))
+            ms_gauss = self.minisom._gaussian((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_gauss, cs_gauss[i])
+
+
+class TestCupySomHex(unittest.TestCase):
+    def setUp(self):
+        self.som = CupySom(5, 5, 1, topology='hexagonal')
+        self.minisom = MiniSom(5, 5, 1, topology='hexagonal')
+
+        for i in range(5):
+            for j in range(5):
+                # checking weights normalization
+                np.testing.assert_almost_equal(1.0, np.linalg.norm(self.som._weights[i, j]))
+        self.som._weights = np.zeros((5, 5, 1))  # fake weights
+        self.som._weights[2, 3] = 5.0
+        self.som._weights[1, 1] = 2.0
+        
+        np.random.seed(1234)
+        cp.random.seed(1234)
+
+    def test_gaussian(self):
+        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        c = (cx.flatten(), cy.flatten())        
+
+        cs_gauss = cp.asnumpy(self.som._gaussian_generic(c, 1))
+        print(cs_gauss.shape)
+
+        for i in range(len(c[0])):
+            x = np.asscalar(cp.asnumpy(c[0][i]))
+            y = np.asscalar(cp.asnumpy(c[1][i]))
+            print(x,y)
+            ms_gauss = self.minisom._gaussian((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_gauss, cs_gauss[i])
