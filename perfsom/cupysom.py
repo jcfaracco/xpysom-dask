@@ -19,7 +19,7 @@ def find_cuda_cores():
         print("Could not infer #cuda_cores")
         return 0
 
-def l2dist_squared(x, w):
+def euclidean_squared(x, w):
     """Calculate L2 distance
 
     NB: result shape is (N,X*Y)
@@ -66,7 +66,7 @@ class CupySom(MiniSom):
         self.neighborhood = neig_functions[neighborhood_function]
 
         distance_functions = {
-            'euclidean': l2dist_squared,
+            'euclidean': euclidean_squared,
         }
 
         if activation_distance not in distance_functions:
