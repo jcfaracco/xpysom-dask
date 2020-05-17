@@ -90,11 +90,16 @@ class CupySom(MiniSom):
 
         if topology == 'rectangular':
             neig_functions = {
-                'gaussian': self._gaussian_rect
+                'gaussian': self._gaussian_rect,
+                'mexican_hat': self._mexican_hat_rect,
+                'bubble': self._bubble,
+                'triangle': self._triangle,
             }
         elif topology == 'hexagonal':
             neig_functions = {
-                'gaussian': self._gaussian_generic
+                'gaussian': self._gaussian_generic,
+                'mexican_hat': self._mexican_hat_generic,
+                'bubble': self._bubble,
             }
 
         if neighborhood_function not in neig_functions:
@@ -171,6 +176,67 @@ class CupySom(MiniSom):
         ax = cp.exp(-cp.power(nx-cx, 2, dtype=cp.float32)/d)
         ay = cp.exp(-cp.power(ny-cy, 2, dtype=cp.float32)/d)
         return (ax*ay).transpose((0,2,1))
+    
+    def _mexican_hat_rect(self, c, sigma):
+        """Mexican hat centered in c (only rect topology)"""
+        d = 2*np.pi*sigma*sigma
+
+        nx = self._neigx_gpu[cp.newaxis,:]
+        ny = self._neigy_gpu[cp.newaxis,:]
+        cx = c[0][:,cp.newaxis]
+        cy = c[1][:,cp.newaxis]
+
+        px = cp.power(nx-cx, 2, dtype=cp.float32)
+        py = cp.power(ny-cy, 2, dtype=cp.float32)
+        p = px[:,:,cp.newaxis] + py[:,cp.newaxis,:]
+        
+        return cp.exp(-p/d)*(1-2/d*p)
+
+    def _mexican_hat_generic(self, c, sigma):
+        """Mexican hat centered in c on any topology
+        
+        TODO: this function is much slower than the _rect one
+        """
+        d = 2*np.pi*sigma*sigma
+
+        nx = self._xx_gpu[cp.newaxis,:,:]
+        ny = self._yy_gpu[cp.newaxis,:,:]
+        cx = self._xx_gpu.T[c][:, cp.newaxis, cp.newaxis]
+        cy = self._yy_gpu.T[c][:, cp.newaxis, cp.newaxis]
+
+        px = cp.power(nx-cx, 2, dtype=cp.float32)
+        py = cp.power(ny-cy, 2, dtype=cp.float32)
+        p = px + py
+        
+        return (cp.exp(-p/d)*(1-2/d*p)).transpose((0,2,1))
+
+    def _bubble(self, c, sigma):
+        """Constant function centered in c with spread sigma.
+        sigma should be an odd value.
+        """
+        nx = self._neigx_gpu[cp.newaxis,:]
+        ny = self._neigy_gpu[cp.newaxis,:]
+        cx = c[0][:,cp.newaxis]
+        cy = c[1][:,cp.newaxis]
+
+        ax = cp.logical_and(nx > cx-sigma,
+                         nx < cx+sigma)
+        ay = cp.logical_and(ny > cy-sigma,
+                         ny < cy+sigma)
+        return (ax[:,:,cp.newaxis]*ay[:,cp.newaxis,:]).astype(cp.float32)
+
+    def _triangle(self, c, sigma):
+        """Triangular function centered in c with spread sigma."""
+        nx = self._neigx_gpu[cp.newaxis,:]
+        ny = self._neigy_gpu[cp.newaxis,:]
+        cx = c[0][:,cp.newaxis]
+        cy = c[1][:,cp.newaxis]
+
+        triangle_x = (-cp.abs(cx - nx)) + sigma
+        triangle_y = (-cp.abs(cy - ny)) + sigma
+        triangle_x[triangle_x < 0] = 0.
+        triangle_y[triangle_y < 0] = 0.
+        return triangle_x[:,:,cp.newaxis]*triangle_y[:,cp.newaxis,:]
 
     def _winner(self, x_gpu):
         """Computes the coordinates of the winning neuron for the sample x"""
@@ -331,6 +397,45 @@ class TestCupySom(unittest.TestCase):
             ms_gauss = self.minisom._gaussian((x,y), 1)
             np.testing.assert_array_almost_equal(ms_gauss, cs_gauss[i])
 
+    def test_mexican_hat(self):
+        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        c = (cx.flatten(), cy.flatten())        
+
+        cs_mex = cp.asnumpy(self.som._mexican_hat_rect(c, 1))
+        print(cs_mex.shape)
+
+        for i in range(len(c[0])):
+            x = cp.asnumpy(c[0][i]).item()
+            y = cp.asnumpy(c[1][i]).item()
+            ms_mex = self.minisom._mexican_hat((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])
+
+    def test_bubble(self):
+        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        c = (cx.flatten(), cy.flatten())        
+
+        cs_mex = cp.asnumpy(self.som._bubble(c, 1))
+        print(cs_mex.shape)
+
+        for i in range(len(c[0])):
+            x = cp.asnumpy(c[0][i]).item()
+            y = cp.asnumpy(c[1][i]).item()
+            ms_mex = self.minisom._bubble((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])
+
+    def test_triangle(self):
+        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        c = (cx.flatten(), cy.flatten())        
+
+        cs_mex = cp.asnumpy(self.som._triangle(c, 1))
+        print(cs_mex.shape)
+
+        for i in range(len(c[0])):
+            x = cp.asnumpy(c[0][i]).item()
+            y = cp.asnumpy(c[1][i]).item()
+            ms_mex = self.minisom._triangle((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])
+
 
 class TestCupySomHex(unittest.TestCase):
     def setUp(self):
@@ -361,3 +466,29 @@ class TestCupySomHex(unittest.TestCase):
             print(x,y)
             ms_gauss = self.minisom._gaussian((x,y), 1)
             np.testing.assert_array_almost_equal(ms_gauss, cs_gauss[i])
+
+    def test_mexican_hat(self):
+        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        c = (cx.flatten(), cy.flatten())        
+
+        cs_mex = cp.asnumpy(self.som._mexican_hat_generic(c, 1))
+        print(cs_mex.shape)
+
+        for i in range(len(c[0])):
+            x = cp.asnumpy(c[0][i]).item()
+            y = cp.asnumpy(c[1][i]).item()
+            ms_mex = self.minisom._mexican_hat((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])
+
+    def test_bubble(self):
+        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        c = (cx.flatten(), cy.flatten())        
+
+        cs_mex = cp.asnumpy(self.som._bubble(c, 1))
+        print(cs_mex.shape)
+
+        for i in range(len(c[0])):
+            x = cp.asnumpy(c[0][i]).item()
+            y = cp.asnumpy(c[1][i]).item()
+            ms_mex = self.minisom._bubble((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])            
