@@ -30,6 +30,20 @@ def euclidean_squared_distance(x, w):
     cross_term = cp.dot(x, w_flat.T)
     return -2 * cross_term + x_sq + w_flat_sq.T
 
+def cosine_distance(x, w):
+    """Calculate cosine distance
+
+    NB: result shape is (N,X*Y)
+    """
+    w_flat = w.reshape(-1, w.shape[2])
+    x_sq = cp.power(x, 2).sum(axis=1, keepdims=True)
+    w_flat_sq = cp.power(w_flat, 2).sum(axis=1, keepdims=True)
+
+    num = cp.dot(x, w_flat.T)
+    denum = cp.sqrt(x_sq * w_flat_sq.T)
+    similarity = cp.nan_to_num(num/denum)
+
+    return 1 - similarity
 
 manhattan_distance_kernel = cp.ReductionKernel(
     'T x, T w',
@@ -93,6 +107,7 @@ class CupySom(MiniSom):
         distance_functions = {
             'euclidean': euclidean_squared_distance,
             'manhattan': manhattan_distance,
+            'cosine': cosine_distance,
         }
 
         if activation_distance not in distance_functions:
@@ -285,6 +300,14 @@ class TestCupySom(unittest.TestCase):
             ms_dist = self.minisom._euclidean_distance(sample, w)**2
             np.testing.assert_array_almost_equal(ms_dist, cs_dist[i])
 
+    def test_cosine_distance(self):
+        x = np.random.rand(100, 20)
+        w = np.random.rand(10,10,20)
+        cs_dist = cp.asnumpy(cosine_distance(cp.array(x), cp.array(w)))
+        cs_dist = cs_dist.reshape((100,10,10))
+        for i, sample in enumerate(x):
+            ms_dist = self.minisom._cosine_distance(sample, w)
+            np.testing.assert_array_almost_equal(ms_dist, cs_dist[i])
 
     def test_manhattan_distance(self):
         x = np.random.rand(100, 20)
