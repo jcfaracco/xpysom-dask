@@ -30,6 +30,31 @@ def euclidean_squared_distance(x, w):
     cross_term = cp.dot(x, w_flat.T)
     return -2 * cross_term + x_sq + w_flat_sq.T
 
+
+manhattan_distance_kernel = cp.ReductionKernel(
+    'T x, T w',
+    'T y',
+    'abs(x-w)',
+    'a+b',
+    'y = a',
+    '0',
+    'l1norm'
+)
+def manhattan_distance(x, w):
+    """Calculate Manhattan distance
+
+    It is very slow (~10x) compared to euclidean distance
+    TODO: improve performance. Maybe a custom kernel is necessary
+
+    NB: result shape is (N,X*Y)
+    """
+    d = manhattan_distance_kernel(
+        x[:,np.newaxis,np.newaxis,:], 
+        w[np.newaxis,:,:,:], 
+        axis=3
+    )
+    return d.reshape(x.shape[0], w.shape[0]*w.shape[1])
+
 def ravel_idx_2d(idx, cols):
     return idx[0] * cols + idx[1]
 
@@ -67,6 +92,7 @@ class CupySom(MiniSom):
 
         distance_functions = {
             'euclidean': euclidean_squared_distance,
+            'manhattan': manhattan_distance,
         }
 
         if activation_distance not in distance_functions:
@@ -257,6 +283,16 @@ class TestCupySom(unittest.TestCase):
         cs_dist = cs_dist.reshape((100,10,10))
         for i, sample in enumerate(x):
             ms_dist = self.minisom._euclidean_distance(sample, w)**2
+            np.testing.assert_array_almost_equal(ms_dist, cs_dist[i])
+
+
+    def test_manhattan_distance(self):
+        x = np.random.rand(100, 20)
+        w = np.random.rand(10,10,20)
+        cs_dist = cp.asnumpy(manhattan_distance(cp.array(x), cp.array(w)))
+        cs_dist = cs_dist.reshape((100,10,10))
+        for i, sample in enumerate(x):
+            ms_dist = self.minisom._manhattan_distance(sample, w)
             np.testing.assert_array_almost_equal(ms_dist, cs_dist[i])
 
     def test_gaussian(self):
