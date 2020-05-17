@@ -294,7 +294,7 @@ class TestCupySom(unittest.TestCase):
     def test_euclidean_distance(self):
         x = np.random.rand(100, 20)
         w = np.random.rand(10,10,20)
-        cs_dist = cp.asnumpy(l2dist_squared(cp.array(x), cp.array(w)))
+        cs_dist = cp.asnumpy(euclidean_squared_distance(cp.array(x), cp.array(w)))
         cs_dist = cs_dist.reshape((100,10,10))
         for i, sample in enumerate(x):
             ms_dist = self.minisom._euclidean_distance(sample, w)**2
