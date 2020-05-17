@@ -38,7 +38,7 @@ def unravel_idx_2d(i, cols):
 class CupySom(MiniSom):
     def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5, decay_function='exponential', neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=None, n_parallel=0):
         # passing some mock parameters to disable checks
-        super().__init__(x, y, input_len, sigma=sigma, learning_rate=learning_rate, decay_function=decay_function, neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=random_seed)
+        super().__init__(x, y, input_len, sigma=sigma, learning_rate=learning_rate, decay_function=decay_function, neighborhood_function='gaussian', topology=topology, activation_distance='euclidean', random_seed=random_seed)
 
         if n_parallel == 0:
             n_parallel = find_cuda_cores()*DEFAULT_CORE_OVERSUBSCRIPTION    
@@ -48,13 +48,14 @@ class CupySom(MiniSom):
         
         self._n_parallel = n_parallel
 
-        if topology not in ['rectangular']:
-            msg = '%s not supported only rectangular available'
-            raise ValueError(msg % topology)
-
-        neig_functions = {
-            'gaussian': self._gaussian,
-        }
+        if topology == 'rectangular':
+            neig_functions = {
+                'gaussian': self._gaussian_rect
+            }
+        elif topology == 'hexagonal':
+            neig_functions = {
+                'gaussian': self._gaussian_generic
+            }
 
         if neighborhood_function not in neig_functions:
             msg = '%s not supported. Functions available: %s'
@@ -80,8 +81,11 @@ class CupySom(MiniSom):
 
         self._normalizeWeights = False
 
-        self._neigx = cp.arange(x, dtype=cp.float32)
-        self._neigy = cp.arange(y, dtype=cp.float32) 
+        self._neigx_gpu = cp.arange(x, dtype=cp.float32)
+        self._neigy_gpu = cp.arange(y, dtype=cp.float32) 
+
+        self._xx_gpu = cp.array(self._xx)
+        self._yy_gpu = cp.array(self._yy)
 
     def _activate(self, x_gpu):
         """Updates matrix activation_map, in this matrix
@@ -94,18 +98,37 @@ class CupySom(MiniSom):
                 self._weights_gpu
         )
 
-    def _gaussian(self, c, sigma):
-        """Returns a Gaussian centered in c"""
+    def _gaussian_rect(self, c, sigma):
+        """Returns a Gaussian centered in c on a rect topology
+
+        This function is optimized wrt the generic one.
+        """
         d = 2*np.pi*sigma*sigma
 
-        nx = self._neigx[cp.newaxis,:]
-        ny = self._neigy[cp.newaxis,:]
+        nx = self._neigx_gpu[cp.newaxis,:]
+        ny = self._neigy_gpu[cp.newaxis,:]
         cx = c[0][:,cp.newaxis]
         cy = c[1][:,cp.newaxis]
 
         ax = cp.exp(-cp.power(nx-cx, 2, dtype=cp.float32)/d)
         ay = cp.exp(-cp.power(ny-cy, 2, dtype=cp.float32)/d)
         return ax[:,:,cp.newaxis]*ay[:,cp.newaxis,:]
+
+    def _gaussian_generic(self, c, sigma):
+        """Returns a Gaussian centered in c on any topology
+        
+        TODO: this function is much slower than the _rect one
+        """
+        d = 2*np.pi*sigma*sigma
+
+        nx = self._xx_gpu[cp.newaxis,:,:]
+        ny = self._yy_gpu[cp.newaxis,:,:]
+        cx = self._xx_gpu.T[c][:, cp.newaxis, cp.newaxis]
+        cy = self._yy_gpu.T[c][:, cp.newaxis, cp.newaxis]
+
+        ax = cp.exp(-cp.power(nx-cx, 2, dtype=cp.float32)/d)
+        ay = cp.exp(-cp.power(ny-cy, 2, dtype=cp.float32)/d)
+        return (ax*ay).transpose((0,2,1))
 
     def _winner(self, x_gpu):
         """Computes the coordinates of the winning neuron for the sample x"""
