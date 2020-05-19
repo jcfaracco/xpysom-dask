@@ -347,6 +347,12 @@ class CupySom(MiniSom):
         if verbose:
             print('\n quantization error:', self.quantization_error(data))
 
+    def train_batch(self, data, num_iteration, verbose=False):
+        return train(data, num_iteration, verbose=verbose)
+
+    def train_random(self, data, num_iteration, verbose=False):
+        print("WARNING: due to batch SOM algorithm, random order is not supported. Falling back to train_batch.")
+        return train(data, num_iteration, verbose=verbose)
 
 class TestCupySom(unittest.TestCase):
     def setUp(self):
