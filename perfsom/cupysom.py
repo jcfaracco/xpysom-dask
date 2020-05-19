@@ -76,9 +76,9 @@ def unravel_idx_2d(i, cols):
     return (i % cols, cp.floor_divide(i, cols))
 
 class CupySom(MiniSom):
-    def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5, decay_function='exponential', neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', normalize_weights=False, random_seed=None, n_parallel=0):
+    def __init__(self, x, y, input_len, sigma=1.0, sigmaN=0.0, learning_rate=0.5, learning_rateN=0.0, decay_function='exponential', neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', normalize_weights=False, random_seed=None, n_parallel=0):
         # passing some mock parameters to disable checks
-        super().__init__(x, y, input_len, sigma=sigma, learning_rate=learning_rate, decay_function=decay_function, neighborhood_function='gaussian', topology=topology, activation_distance='euclidean', random_seed=random_seed)
+        super().__init__(x, y, input_len, sigma=sigma, sigmaN=sigmaN, learning_rate=learning_rate, learning_rateN=learning_rateN, decay_function=decay_function, neighborhood_function='gaussian', topology=topology, activation_distance='euclidean', random_seed=random_seed)
 
         if n_parallel == 0:
             n_parallel = find_cuda_cores()*DEFAULT_CORE_OVERSUBSCRIPTION    
@@ -316,9 +316,9 @@ class CupySom(MiniSom):
                     dtype=cp.float32
                 )
 
-            eta = self._decay_function(self._learning_rate, iteration, num_iteration)
+            eta = self._decay_function(self._learning_rate, self._learning_rateN, iteration, num_iteration)
             # sigma and learning rate decrease with the same rule
-            sig = self._decay_function(self._sigma, iteration, num_iteration)
+            sig = self._decay_function(self._sigma, self._sigmaN, iteration, num_iteration)
 
             for i in range(0, len(data), self._n_parallel):
                 start = i
