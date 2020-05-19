@@ -76,7 +76,7 @@ def unravel_idx_2d(i, cols):
     return (i % cols, cp.floor_divide(i, cols))
 
 class CupySom(MiniSom):
-    def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5, decay_function='exponential', neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', random_seed=None, n_parallel=0):
+    def __init__(self, x, y, input_len, sigma=1.0, learning_rate=0.5, decay_function='exponential', neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', normalize_weights=False, random_seed=None, n_parallel=0):
         # passing some mock parameters to disable checks
         super().__init__(x, y, input_len, sigma=sigma, learning_rate=learning_rate, decay_function=decay_function, neighborhood_function='gaussian', topology=topology, activation_distance='euclidean', random_seed=random_seed)
 
@@ -101,6 +101,8 @@ class CupySom(MiniSom):
                 'mexican_hat': self._mexican_hat_generic,
                 'bubble': self._bubble,
             }
+        else:
+            neig_functions = {}
 
         if neighborhood_function not in neig_functions:
             msg = '%s not supported. Functions available: %s'
@@ -126,13 +128,14 @@ class CupySom(MiniSom):
         self._unravel_precomputed = cp.unravel_index(cp.arange(x*y, dtype=cp.int64), (x,y))
         self._weights_gpu = None
 
-        self._normalizeWeights = False
+        self._normalizeWeights = normalize_weights
 
         self._neigx_gpu = cp.arange(x, dtype=cp.float32)
         self._neigy_gpu = cp.arange(y, dtype=cp.float32) 
 
-        self._xx_gpu = cp.array(self._xx)
-        self._yy_gpu = cp.array(self._yy)
+        if topology == 'hexagonal':
+            self._xx_gpu = cp.array(self._xx)
+            self._yy_gpu = cp.array(self._yy)
 
     def _activate(self, x_gpu):
         """Updates matrix activation_map, in this matrix
@@ -261,17 +264,8 @@ class CupySom(MiniSom):
         t : int
             Iteration index
         """
-
         
-        # wins = cp.unravel_index(wins_raveled, self._activation_map_gpu.shape)
-
-        # improves the performances
         g_gpu = self.neighborhood(wins, sig)*eta
-
-        # idx = cp.arange(g_gpu.shape[0]) * (g_gpu.shape[1]*g_gpu.shape[2]) + wins[0] * g_gpu.shape[2] + wins[1]
-        # mins = g_gpu.ravel()[idx]
-        # # Same as assigning 0 to masked values NB: need to negate condition!
-        # g_gpu *= (g_gpu >= self._neigh_threshold * mins[:,cp.newaxis, cp.newaxis])
 
         sum_g_gpu = cp.sum(g_gpu, axis=0)
         w_sum_g_gpu = self._weights_gpu * sum_g_gpu[:,:,cp.newaxis]
@@ -286,10 +280,10 @@ class CupySom(MiniSom):
 
 
     def merge_updates(self):
-        update = cp.nan_to_num(
+        self._weights_gpu += cp.nan_to_num(
             self._numerator_gpu / self._denominator_gpu
         )
-        self._weights_gpu += update
+        
         if self._normalizeWeights:
             norms_gpu = cp.linalg.norm(self._weights_gpu, axis=2)
             self._weights_gpu = cp.nan_to_num(
@@ -304,38 +298,51 @@ class CupySom(MiniSom):
         # Copy arrays to device
         self._weights_gpu = cp.asarray(self._weights, dtype=cp.float32)
         data_gpu = cp.asarray(data, dtype=cp.float32)
-
-        batch_size = len(data)
-        setIdx = np.arange(ceil(len(data)/self._n_parallel))
-        currIdx = 0
         
         if verbose:
             print_progress(-1, num_iteration*len(data))
 
         for iteration in range(iter_beg, iter_end):
-            self._numerator_gpu   = cp.zeros(self._weights_gpu.shape, dtype=cp.float32)
-            self._denominator_gpu = cp.zeros((self._weights_gpu.shape[0], self._weights_gpu.shape[1],1), dtype=cp.float32)
+            try: # reuse already allocated memory
+                self._numerator_gpu.fill(0)
+                self._denominator_gpu.fill(0)
+            except AttributeError: # whoops, I haven't allocated it yet
+                self._numerator_gpu = cp.zeros(
+                    self._weights_gpu.shape, 
+                    dtype=cp.float32
+                )
+                self._denominator_gpu = cp.zeros(
+                    (self._weights_gpu.shape[0], self._weights_gpu.shape[1],1),
+                    dtype=cp.float32
+                )
 
             eta = self._decay_function(self._learning_rate, iteration, num_iteration)
             # sigma and learning rate decrease with the same rule
             sig = self._decay_function(self._sigma, iteration, num_iteration)
 
-            for i in range(0, batch_size, self._n_parallel):
-                start = setIdx[currIdx] * self._n_parallel
+            for i in range(0, len(data), self._n_parallel):
+                start = i
                 end = start + self._n_parallel
                 if end > len(data):
                     end = len(data)
+
                 self.update(data_gpu[start:end], self._winner(data_gpu[start:end]), eta, sig)
-                currIdx = (currIdx + 1) % len(setIdx)
+
                 if verbose:
                     print_progress(
                         iteration*len(data)+end-1, 
                         num_iteration*len(data)
                     )
+                    
             self.merge_updates()
 
         # Copy back arrays to host
         self._weights = cp.asnumpy(self._weights_gpu)
+        
+        # free temporary memory
+        del self._numerator_gpu
+        del self._denominator_gpu
+        del self._activation_map_gpu
         
         if verbose:
             print('\n quantization error:', self.quantization_error(data))
