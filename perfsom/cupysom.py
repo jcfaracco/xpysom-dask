@@ -76,9 +76,9 @@ def unravel_idx_2d(i, cols):
     return (i % cols, cp.floor_divide(i, cols))
 
 class CupySom(MiniSom):
-    def __init__(self, x, y, input_len, sigma=1.0, sigmaN=0.0, learning_rate=0.5, learning_rateN=0.0, decay_function='exponential', neighborhood_function='gaussian', topology='rectangular', activation_distance='euclidean', normalize_weights=False, random_seed=None, n_parallel=0):
+    def __init__(self, x, y, input_len, sigma=0, sigmaN=1, learning_rate=0.5, learning_rateN=0.01, decay_function='exponential', neighborhood_function='gaussian', std_coeff=0.5, topology='rectangular', activation_distance='euclidean', normalize_weights=False, random_seed=None, n_parallel=0):
         # passing some mock parameters to disable checks
-        super().__init__(x, y, input_len, sigma=sigma, sigmaN=sigmaN, learning_rate=learning_rate, learning_rateN=learning_rateN, decay_function=decay_function, neighborhood_function='gaussian', topology=topology, activation_distance='euclidean', random_seed=random_seed)
+        super().__init__(x, y, input_len, sigma=sigma, sigmaN=sigmaN, learning_rate=learning_rate, learning_rateN=learning_rateN, decay_function=decay_function, neighborhood_function='gaussian', std_coeff=std_coeff, topology=topology, activation_distance='euclidean', random_seed=random_seed)
 
         if n_parallel == 0:
             n_parallel = find_cuda_cores()*DEFAULT_CORE_OVERSUBSCRIPTION    
@@ -153,7 +153,7 @@ class CupySom(MiniSom):
 
         This function is optimized wrt the generic one.
         """
-        d = 2*np.pi*sigma*sigma
+        d = 2*self._std_coeff**2*sigma**2
 
         nx = self._neigx_gpu[cp.newaxis,:]
         ny = self._neigy_gpu[cp.newaxis,:]
@@ -169,7 +169,7 @@ class CupySom(MiniSom):
         
         TODO: this function is much slower than the _rect one
         """
-        d = 2*np.pi*sigma*sigma
+        d = 2*self._std_coeff**2*sigma**2
 
         nx = self._xx_gpu[cp.newaxis,:,:]
         ny = self._yy_gpu[cp.newaxis,:,:]
@@ -182,7 +182,7 @@ class CupySom(MiniSom):
     
     def _mexican_hat_rect(self, c, sigma):
         """Mexican hat centered in c (only rect topology)"""
-        d = 2*np.pi*sigma*sigma
+        d = 2*self._std_coeff**2*sigma**2
 
         nx = self._neigx_gpu[cp.newaxis,:]
         ny = self._neigy_gpu[cp.newaxis,:]
@@ -200,7 +200,7 @@ class CupySom(MiniSom):
         
         TODO: this function is much slower than the _rect one
         """
-        d = 2*np.pi*sigma*sigma
+        d = 2*self._std_coeff**2*sigma**2
 
         nx = self._xx_gpu[cp.newaxis,:,:]
         ny = self._yy_gpu[cp.newaxis,:,:]
