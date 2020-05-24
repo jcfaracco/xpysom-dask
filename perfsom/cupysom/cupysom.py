@@ -7,7 +7,7 @@ import cupy as cp
 
 from perfsom.minisom import MiniSom, asymptotic_decay, fast_norm, print_progress
 
-from .distances import cosine_distance, manhattan_distance, euclidean_squared_distance
+from .distances import cosine_distance, manhattan_distance, euclidean_squared_distance, euclidean_squared_distance_part, euclidean_distance
 from .neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
 
 # In my GPU it looks like this is the best performance/memory trade-off
@@ -73,7 +73,8 @@ class CupySom(MiniSom):
         self.neighborhood = neig_functions[neighborhood_function]
 
         distance_functions = {
-            'euclidean': euclidean_squared_distance,
+            'euclidean': euclidean_squared_distance_part,
+            'euclidean_no_opt': euclidean_squared_distance,
             'manhattan': manhattan_distance,
             'cosine': cosine_distance,
         }
@@ -98,10 +99,19 @@ class CupySom(MiniSom):
         if len(x_gpu.shape) == 1:
             x_gpu = cp.expand_dims(x_gpu, axis=1)
 
-        self._activation_map_gpu = self._activation_distance(
+        if self._sq_weights_gpu is not None:
+            self._activation_map_gpu = self._activation_distance(
+                    x_gpu, 
+                    self._weights_gpu,
+                    self._sq_weights_gpu
+            )
+        else:
+            self._activation_map_gpu = self._activation_distance(
+                    x_gpu, 
                 x_gpu, 
-                self._weights_gpu
-        )
+                    x_gpu, 
+                    self._weights_gpu
+            )
 
     def _winner(self, x_gpu):
         """Computes the coordinates of the winning neuron for the sample x"""
@@ -178,6 +188,22 @@ class CupySom(MiniSom):
                     dtype=cp.float32
                 )
 
+            if self._activation_distance in [
+                    euclidean_squared_distance,
+                    euclidean_squared_distance_part,
+                    cosine_distance
+            ]:
+                self._sq_weights_gpu = (
+                    cp.power(
+                        self._weights_gpu.reshape(
+                            -1, self._weights_gpu.shape[2]
+                        ),
+                        2
+                    ).sum(axis=1, keepdims=True)
+                )
+            else:
+                self._sq_weights_gpu = None
+
             eta = self._decay_function(self._learning_rate, self._learning_rateN, iteration, num_iteration)
             # sigma and learning rate decrease with the same rule
             sig = self._decay_function(self._sigma, self._sigmaN, iteration, num_iteration)
@@ -205,6 +231,7 @@ class CupySom(MiniSom):
         del self._numerator_gpu
         del self._denominator_gpu
         del self._activation_map_gpu
+        del self._sq_weights_gpu
         
         if verbose:
             print('\n quantization error:', self.quantization_error(data))
