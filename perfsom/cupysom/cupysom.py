@@ -108,8 +108,6 @@ class CupySom(MiniSom):
         else:
             self._activation_map_gpu = self._activation_distance(
                     x_gpu, 
-                x_gpu, 
-                    x_gpu, 
                     self._weights_gpu
             )
 
@@ -242,3 +240,88 @@ class CupySom(MiniSom):
     def train_random(self, data, num_iteration, verbose=False):
         print("WARNING: due to batch SOM algorithm, random order is not supported. Falling back to train_batch.")
         return train(data, num_iteration, verbose=verbose)
+
+    def quantization(self, data_gpu):
+        """Assigns a code book (weights vector of the winning neuron)
+        to each sample in data."""
+        self._check_input_len(data_gpu)
+        winners_coords = cp.argmin(self._distance_from_weights(data_gpu), axis=1)
+        return self._weights_gpu[cp.unravel_index(winners_coords,
+                                           self._weights.shape[:2])]
+
+    def _distance_from_weights(self, data_gpu):
+        """Returns a matrix d where d[i,j] is the euclidean distance between
+        data[i] and the j-th weight.
+        """
+        distances = []
+        for start in range(0, len(data_gpu), self._n_parallel):
+            end = start + self._n_parallel
+            if end > len(data_gpu):
+                end = len(data_gpu)
+            
+            distances.append(euclidean_distance(data_gpu[start:end], self._weights_gpu))
+        return cp.vstack(distances)
+
+    def quantization_error(self, data):
+        """Returns the quantization error computed as the average
+        distance between each input sample and its best matching unit."""
+        self._check_input_len(data)
+
+        # load to GPU
+        data_gpu = cp.array(data, dtype=cp.float32)
+        self._weights_gpu = cp.array(self._weights)
+
+        # recycle buffer
+        data_gpu -= self.quantization(data_gpu) 
+
+        # free no longer needed buffer
+        del self._weights_gpu
+
+        qe = cp.linalg.norm(data_gpu, axis=1).mean()
+        
+        # free no longer needed buffer
+        del data_gpu
+
+        return qe.item()
+
+    def topographic_error(self, data):
+        """Returns the topographic error computed by finding
+        the best-matching and second-best-matching neuron in the map
+        for each input and then evaluating the positions.
+
+        A sample for which these two nodes are not ajacent conunts as
+        an error. The topographic error is given by the
+        the total number of errors divided by the total of samples.
+
+        If the topographic error is 0, no error occurred.
+        If 1, the topology was not preserved for any of the samples."""
+        self._check_input_len(data)
+        total_neurons = np.prod(self._weights.shape)
+        if total_neurons == 1:
+            warn('The topographic error is not defined for a 1-by-1 map.')
+            return np.nan
+
+        # load to GPU
+        data_gpu = cp.array(data, dtype=cp.float32)
+        self._weights_gpu = cp.array(self._weights)
+
+        distances = self._distance_from_weights(data_gpu) 
+
+        # free no longer needed buffers
+        del self._weights_gpu
+        del data_gpu
+
+        # b2mu: best 2 matching units
+        b2mu_inds = cp.argsort(distances, axis=1)[:, :2]
+        b2my_xy = cp.unravel_index(b2mu_inds, self._weights.shape[:2])
+        if self.topology ==  'rectangular':
+            b2mu_x, b2mu_y = b2my_xy[0], b2my_xy[1]
+            diff_b2mu_x = cp.abs(cp.diff(b2mu_x))
+            diff_b2mu_y = cp.abs(cp.diff(b2mu_y))
+            return ((diff_b2mu_x > 1) | (diff_b2mu_y > 1)).mean().item()
+        elif self.topology == 'hexagonal':
+            b2mu_x = self._xx_gpu[b2my_xy[0], b2my_xy[1]]
+            b2mu_y = self._yy_gpu[b2my_xy[0], b2my_xy[1]]
+            dxdy = cp.hstack([cp.diff(b2mu_x), cp.diff(b2mu_y)])
+            distance = cp.linalg.norm(dxdy, axis=1)
+            return (distance > 1.5).mean().item()
