@@ -54,7 +54,7 @@ def print_progress(t, T):
         stdout.write(progress)
 
 
-class CupySom:
+class XPySom:
     def __init__(self, x, y, input_len, 
                  sigma=0, sigmaN=1, 
                  learning_rate=0.5, learning_rateN=0.01, decay_function='exponential',

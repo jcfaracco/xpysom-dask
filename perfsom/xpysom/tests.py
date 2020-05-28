@@ -6,7 +6,7 @@ import cupy as cp
 
 from minisom import MiniSom
 
-from .cupysom import CupySom
+from .xpysom import XPySom
 from .distances import cosine_distance, manhattan_distance, euclidean_squared_distance
 from .neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
 
@@ -15,7 +15,7 @@ import os
 
 class TestCupySom(unittest.TestCase):
     def setUp(self):
-        self.som = CupySom(5, 5, 1, std_coeff=np.sqrt(np.pi))
+        self.som = XPySom(5, 5, 1, std_coeff=np.sqrt(np.pi))
         self.minisom = MiniSom(5, 5, 1)
 
         for i in range(5):
@@ -32,11 +32,11 @@ class TestCupySom(unittest.TestCase):
 
     def test_unavailable_neigh_function(self):
         with self.assertRaises(ValueError):
-            CupySom(5, 5, 1, neighborhood_function='boooom')
+            XPySom(5, 5, 1, neighborhood_function='boooom')
 
     def test_unavailable_distance_function(self):
         with self.assertRaises(ValueError):
-            CupySom(5, 5, 1, activation_distance='ridethewave')
+            XPySom(5, 5, 1, activation_distance='ridethewave')
 
     def test_win_map(self):
         winners = self.som.win_map([[5.0], [2.0]])
@@ -88,20 +88,20 @@ class TestCupySom(unittest.TestCase):
         assert q[1] == 2.0
 
     def test_random_seed(self):
-        som1 = CupySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
-        som2 = CupySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
+        som1 = XPySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
+        som2 = XPySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
         # same initialization
         np.testing.assert_array_almost_equal(som1._weights, som2._weights)
         data = np.random.rand(100, 2)
-        som1 = CupySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
+        som1 = XPySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
         som1.train_random(data, 10)
-        som2 = CupySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
+        som2 = XPySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
         som2.train_random(data, 10)
         # same state after training
         np.testing.assert_array_almost_equal(som1._weights, som2._weights)
 
     def test_train(self):
-        som = CupySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
+        som = XPySom(5, 5, 2, sigma=1.0, learning_rate=0.5, random_seed=1)
         data = np.array([[4, 2], [3, 1]])
         q1 = som.quantization_error(data)
         som.train(data, 10)
@@ -113,20 +113,20 @@ class TestCupySom(unittest.TestCase):
         assert q1 > som.quantization_error(data)
 
     def test_random_weights_init(self):
-        som = CupySom(2, 2, 2, random_seed=1)
+        som = XPySom(2, 2, 2, random_seed=1)
         som.random_weights_init(np.array([[1.0, .0]]))
         for w in som._weights:
             np.testing.assert_array_equal(w[0], np.array([1.0, .0]))
 
     def test_pca_weights_init(self):
-        som = CupySom(2, 2, 2)
+        som = XPySom(2, 2, 2)
         som.pca_weights_init(np.array([[1.,  0.], [0., 1.], [1., 0.], [0., 1.]]))
         expected = np.array([[[0., -1.41421356], [-1.41421356, 0.]],
                           [[1.41421356, 0.], [0., 1.41421356]]])
         np.testing.assert_array_almost_equal(som._weights, expected)
 
     def test_distance_map(self):
-        som = CupySom(2, 2, 2, random_seed=1)
+        som = XPySom(2, 2, 2, random_seed=1)
         som._weights = np.array([[[1.,  0.], [0., 1.]], [[1., 0.], [0., 1.]]])
         np.testing.assert_array_equal(som.distance_map(), np.array([[1., 1.], [1., 1.]]))
 
@@ -219,7 +219,7 @@ class TestCupySom(unittest.TestCase):
 
 class TestCupySomHex(unittest.TestCase):
     def setUp(self):
-        self.som = CupySom(5, 5, 1, topology='hexagonal', std_coeff=np.sqrt(np.pi))
+        self.som = XPySom(5, 5, 1, topology='hexagonal', std_coeff=np.sqrt(np.pi))
         self.minisom = MiniSom(5, 5, 1, topology='hexagonal')
 
         for i in range(5):
