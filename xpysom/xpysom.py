@@ -373,7 +373,7 @@ class XPySom:
 
 
     def _update(self, x_gpu, wins, eta, sig):
-        """Updates the weights of the neurons.
+        """Updates the numerator and denominator accumulators.
 
         Parameters
         ----------
@@ -388,23 +388,19 @@ class XPySom:
         g_gpu = self.neighborhood(wins, sig, xp=self.xp)*eta
 
         sum_g_gpu = self.xp.sum(g_gpu, axis=0)
-        w_sum_g_gpu = self._weights_gpu * sum_g_gpu[:,:,self.xp.newaxis]
+        g_flat_gpu = g_gpu.reshape(g_gpu.shape[0], -1)
+        gT_dot_x_flat_gpu = self.xp.dot(g_flat_gpu.T, x_gpu)
 
-        sum_xg = self.xp.dot(
-            g_gpu.reshape(g_gpu.shape[0],g_gpu.shape[1]*g_gpu.shape[2]).T, 
-            x_gpu
-        )
-
-        self._numerator_gpu += sum_xg.reshape(w_sum_g_gpu.shape) - w_sum_g_gpu
+        self._numerator_gpu += gT_dot_x_flat_gpu.reshape(self._numerator_gpu.shape)
         self._denominator_gpu += sum_g_gpu[:,:,self.xp.newaxis]
 
 
     def _merge_updates(self):
         """
-        Divides the numerator accumulator by the denominator accumulator and 
-        adds the resulting to the weights. 
+        Divides the numerator accumulator by the denominator accumulator 
+        to compute the new weights. 
         """
-        self._weights_gpu += self.xp.nan_to_num(
+        self._weights_gpu = self.xp.nan_to_num(
             self._numerator_gpu / self._denominator_gpu
         )
 
