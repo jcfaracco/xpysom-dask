@@ -83,28 +83,22 @@ class XPySom:
         input_len : int
             Number of the elements of the vectors in input.
 
-        sigma : float, optional (default=1.0)
+        sigma : float, optional (default=min(x,y)/2)
             Spread of the neighborhood function, needs to be adequate
             to the dimensions of the map.
-            (at the iteration t we have sigma(t) = sigma / (1 + t/T)
-            where T is #num_iteration/2)
 
         sigmaN : float, optional (default=0.01)
-            Spread of the neighborhood function at last iteration, 
-            needs to be adequate to the dimensions of the map.
+            Spread of the neighborhood function at last iteration.
 
         learning_rate : float, optional (default=0.5)
-            initial learning rate
-            (at the iteration t we have
-            learning_rate(t) = learning_rate / (1 + t/T)
-            where T is #num_iteration/2)
+            initial learning rate.
 
         learning_rateN : float, optional (default=0.01)
             final learning rate
 
         decay_function : string, optional (default='exponential')
             Function that reduces learning_rate and sigma at each iteration.
-            Possible values: 'exponential', 'linear'
+            Possible values: 'exponential', 'linear', 'aymptotic'
 
         neighborhood_function : string, optional (default='gaussian')
             Function that weights the neighborhood of a position in the map.
@@ -129,6 +123,11 @@ class XPySom:
 
         xp : numpy or cupy, optional (default=cupy if can be imported else numpy)
             Use numpy (CPU) or cupy (GPU) for computations.
+        
+        std_coeff: float, optional (default=0.5)
+            Used to calculate gausssian exponent denominator: 
+            d = 2*std_coeff**2*sigma**2
+
         """
 
         if sigma >= x or sigma >= y:
