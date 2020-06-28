@@ -7,8 +7,6 @@ XPySom is a minimalistic implementation of the Self Organizing Maps (SOM) that c
 
 SOM is a type of Artificial Neural Network able to convert complex, nonlinear statistical relationships between high-dimensional data items into simple geometric relationships on a low-dimensional display.
 
-Updates about XPySom are posted on <a href="https://twitter.com/JustGlowing">Twitter</a>.
-
 Installation
 ---------------------
 
@@ -19,6 +17,8 @@ Download XPySom to a directory of your choice and use the setup script:
 
 How to use it
 ---------------------
+
+The module interface is similar to [MiniSom](https://github.com/JustGlowing/minisom.git). In the following only the basics of the usage are reported, for an overview of all the features, please refer to the original MiniSom examples you can refer to: https://github.com/JustGlowing/minisom/tree/master/examples
 
 In order to use XPySom you need your data organized as a Numpy matrix where each row corresponds to an observation or as list of lists like the following:
 
@@ -46,35 +46,20 @@ You can obtain the position of the winning neuron on the map for a given sample 
 som.winner(data[0])
 ```
 
-For an overview of all the features implemented in XPySom, please refer to the original MiniSom examples you can browse at: https://github.com/JustGlowing/minisom/tree/master/examples
+Differences with MiniSom
+---------------------
+ - The batch SOM algorithm is used (instead of the online used in MiniSom). Therefore, use only `train` to train the SOM, `train_random` and `train_batch` are not present.
+ - `decay_function` input parameter is no longer a function but one of `'linear'`,
+ `'exponential'`, `'asymptotic'`. As a consequence of this change, `sigmaN` and `learning_rateN` have been added as input parameters to represent the values at the last iteration.
+ - New input parameter `std_coeff`, used to calculate gaussian exponent denominator `d = 2*std_coeff**2*sigma**2`. Default value is 0.5 (as in [Somoclu](https://github.com/peterwittek/somoclu), which is **different from MiniSom original value** sqrt(pi)).
+ - New input parameter `xp` (default = `cupy` module). Back-end to use for computations.
+ - New input parameter `n_parallel` to set size of the mini-batch (how many input samples to elaborate at a time).
+ - **Hexagonal** grid support is **experimental** and is significantly slower than rectangular grid.  
 
-#### Export a SOM and load it again
-
-A model can be saved using pickle as follows
-
-```python
-import pickle
-som = XPySom(7, 7, 4)
-
-# ...train the som here
-
-# saving the som in the file som.p
-with open('som.p', 'wb') as outfile:
-    pickle.dump(som, outfile)
-```
-
-and can be loaded as follows
-
-```python
-with open('som.p', 'rb') as infile:
-    som = pickle.load(infile)
-```
-
-Note that if a lambda function is used to define the decay factor XPySom will not be pickable anymore.
 
 Compatibility notes
 ---------------------
-XPySom has been tested under Python 3.6.2.
+XPySom has been tested under Python 3.7.6 with CuPy 7.4.0 or Numpy 1.18.1.
 
 License
 ---------------------
