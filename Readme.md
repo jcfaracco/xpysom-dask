@@ -18,7 +18,7 @@ Download XPySom to a directory of your choice and use the setup script:
 How to use it
 ---------------------
 
-The module interface is similar to [MiniSom](https://github.com/JustGlowing/minisom.git). In the following only the basics of the usage are reported, for an overview of all the features, please refer to the original MiniSom examples you can refer to: https://github.com/JustGlowing/minisom/tree/master/examples
+The module interface is similar to [MiniSom](https://github.com/JustGlowing/minisom.git). In the following only the basics of the usage are reported, for an overview of all the features, please refer to the original MiniSom examples you can refer to: https://github.com/JustGlowing/minisom/tree/master/examples (you can find the same examples also in this repository but they have not been updated yet).
 
 In order to use XPySom you need your data organized as a Numpy matrix where each row corresponds to an observation or as list of lists like the following:
 
@@ -56,6 +56,12 @@ Differences with MiniSom
  - New input parameter `n_parallel` to set size of the mini-batch (how many input samples to elaborate at a time).
  - **Hexagonal** grid support is **experimental** and is significantly slower than rectangular grid.  
 
+
+TODO
+---------------------
+
+ - [ ] Update examples in `examples/`
+ - [ ] Improve hexagonal grid support
 
 Compatibility notes
 ---------------------
