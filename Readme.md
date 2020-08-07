@@ -58,7 +58,8 @@ Differences with MiniSom
 
 Additional documentation
 ---------------------
-A publication about the performance of XPySom has been accepted for presentation at the [IEEE 32nd International Symposium on Computer Architecture and High Performance Computing](https://sbac2020.dcc.fc.up.pt/), on September 8-11, 2020, originally planned in Porto, but turned to a virtual on-line event due to the Covid-19 emergency.
+A publication about the design and performance of XPySom has been accepted for presentation at the [IEEE 32nd International Symposium on Computer Architecture and High Performance Computing](https://sbac2020.dcc.fc.up.pt/):
+  -  Riccardo Mancini, Antonio Ritacco, Giacomo Lanciano and Tommaso Cucinotta. "XPySom: High-Performance Self-Organizing Maps," IEEE 32nd International Symposium on Computer Architecture and High Performance Computing, September 8-11, 2020. Porto, Portugal (turned to a virtual on-line event due to the Covid-19 emergency).
 
 
 TODO
