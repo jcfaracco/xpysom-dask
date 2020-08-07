@@ -56,6 +56,10 @@ Differences with MiniSom
  - New input parameter `n_parallel` to set size of the mini-batch (how many input samples to elaborate at a time).
  - **Hexagonal** grid support is **experimental** and is significantly slower than rectangular grid.  
 
+Additional documentation
+---------------------
+A publication about the performance of XPySom has been accepted for presentation at the [IEEE 32nd International Symposium on Computer Architecture and High Performance Computing](https://sbac2020.dcc.fc.up.pt/), on September 8-11, 2020, originally planned in Porto, but turned to a virtual on-line event due to the Covid-19 emergency.
+
 
 TODO
 ---------------------
