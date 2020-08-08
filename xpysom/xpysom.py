@@ -61,7 +61,7 @@ class XPySom:
                  neighborhood_function='gaussian', std_coeff=0.5, 
                  topology='rectangular', 
                  activation_distance='euclidean', 
-                 random_seed=None, n_parallel=0, 
+                 random_seed=None, n_parallel=0, compact_support=False,
                  xp=default_xp):
         """Initializes a Self Organizing Maps.
 
@@ -128,6 +128,9 @@ class XPySom:
             Used to calculate gausssian exponent denominator: 
             d = 2*std_coeff**2*sigma**2
 
+        compact_support: bool, optional (default=False)
+            Cut the neighbor function to 0 beyond neighbor radius sigma
+
         """
 
         if sigma >= x or sigma >= y:
@@ -186,6 +189,8 @@ class XPySom:
 
         self._decay_function = decay_functions[decay_function]
 
+        self.compact_support = compact_support
+
         neig_functions = self.get_neig_functions()
 
         if neighborhood_function not in neig_functions:
@@ -237,20 +242,20 @@ class XPySom:
         if self.topology == 'rectangular':
             neig_functions = {
                 'gaussian': prepare_neig_func(
-                    gaussian_rect, self._neigx, self._neigy, self._std_coeff),
+                    gaussian_rect, self._neigx, self._neigy, self._std_coeff, self.compact_support),
                 'mexican_hat': prepare_neig_func(
-                    mexican_hat_rect, self._neigx, self._neigy, self._std_coeff),
+                    mexican_hat_rect, self._neigx, self._neigy, self._std_coeff, self.compact_support),
                 'bubble': prepare_neig_func(
                     bubble, self._neigx, self._neigy),
                 'triangle': prepare_neig_func(
-                    triangle, self._neigx, self._neigy),
+                    triangle, self._neigx, self._neigy, self.compact_support),
             }
         elif self.topology == 'hexagonal':
             neig_functions = {
                 'gaussian': prepare_neig_func(
-                    gaussian_generic, self._xx, self._yy, self._std_coeff),
+                    gaussian_generic, self._xx, self._yy, self._std_coeff, self.compact_support),
                 'mexican_hat': prepare_neig_func(
-                    mexican_hat_generic, self._xx, self._yy, self._std_coeff),
+                    mexican_hat_generic, self._xx, self._yy, self._std_coeff, self.compact_support),
                 'bubble': prepare_neig_func(
                     bubble, self._neigx, self._neigy),
             }
