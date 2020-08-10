@@ -404,10 +404,11 @@ class XPySom:
         Divides the numerator accumulator by the denominator accumulator 
         to compute the new weights. 
         """
-        weights = self._numerator_gpu / self._denominator_gpu
-        idx = self.xp.isnan(weights)
-        weights[idx] = self._weights_gpu[idx]
-        self._weights_gpu = weights
+        self._weights_gpu = self.xp.where(
+            self._denominator_gpu != 0,
+            self._numerator_gpu / self._denominator_gpu,
+            self._weights_gpu
+        )
 
 
     def train(self, data, num_epochs, iter_beg=0, iter_end=None, verbose=False):
