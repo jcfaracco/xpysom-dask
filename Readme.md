@@ -10,6 +10,17 @@ SOM is a type of Artificial Neural Network able to convert complex, nonlinear st
 Installation
 ---------------------
 
+You can download XPySom from PyPi:
+
+    pip install xpysom
+
+By default, dependencies for GPU execution are not downloaded. 
+You can also specify a CUDA version to automatically download also those 
+requirements. For example, for CUDA Toolkit 10.2 you would write:
+
+    pip install xpysom[cuda102]
+
+Alternatively, you can manually install XPySom.
 Download XPySom to a directory of your choice and use the setup script:
 
     git clone https://github.com/Manciukic/xpysom.git
@@ -44,6 +55,18 @@ You can obtain the position of the winning neuron on the map for a given sample 
 
 ```
 som.winner(data[0])
+```
+
+By default, XPySom executes on the GPU if available (and required packages are
+correctly installed). You can override this behaviour by passing the `xp` 
+parameter to XPySom set to the package you want to use (only Numpy and Cupy
+have been tested, but in theory any Numpy-compliant package would work).
+
+```python
+from xpysom import XPySom   
+import numpy as np
+
+som = XPySom(6, 6, 4, sigma=0.3, learning_rate=0.5, xp=np)
 ```
 
 Differences with MiniSom
