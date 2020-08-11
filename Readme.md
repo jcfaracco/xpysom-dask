@@ -75,6 +75,14 @@ XPySom has been tested under Python 3.7.6 with CuPy 7.4.0 or Numpy 1.18.1.
 License
 ---------------------
 
-XPySom by Riccardo Mancini, a modification of the original MiniSom by Giuseppe Vettigli, is licensed under the Creative Commons Attribution 3.0 Unported License. To view a copy of this license, visit [http://creativecommons.org/licenses/by/3.0/](http://creativecommons.org/licenses/by/3.0/ "http://creativecommons.org/licenses/by/3.0/").
+XPySom
+Copyright (C) 2020 Riccardo Mancini
 
-![License]( http://i.creativecommons.org/l/by/3.0/88x31.png "Creative Commons Attribution 3.0 Unported License")
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+XPySom is a modification of the original MiniSom by Giuseppe Vettigli, 
+which is licensed under the Creative Commons Attribution 3.0 Unported License
+and can be found at the following [link](https://github.com/JustGlowing/minisom).
