@@ -16,7 +16,7 @@ setup(name='XPySom',
       install_requires=['numpy'],
       extra_requires={'gpu': ['cupy']},
       url='https://github.com/Manciukic/xpysom',
-      download_url='https://github.com/Manciukic/xpysom/archive/master.zip',
+      download_url='https://github.com/Manciukic/xpysom/archive/v1.0.0.tar.gz',
       keywords=keywords,
       classifiers=[
             'Development Status :: 3 - Alpha',      
