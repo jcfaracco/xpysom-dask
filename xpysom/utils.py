@@ -1,7 +1,16 @@
 import subprocess
 import multiprocessing
 
-def find_cuda_cores():
+def find_max_cuda_threads():
+    try:
+        import cupy as cp
+        dev = cp.cuda.Device()
+        n_smp = dev.attributes['MultiProcessorCount']
+        max_thread_per_smp = dev.attributes['MaxThreadsPerMultiProcessor']
+        return n_smp*max_thread_per_smp
+    except:
+        print("Cupy is not available.")
+        return 0
     try:
         
         return int(subprocess.check_output("nvidia-settings -q CUDACores -t", shell=True))

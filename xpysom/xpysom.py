@@ -19,14 +19,13 @@ except:
 
 from .distances import cosine_distance, manhattan_distance, euclidean_squared_distance, euclidean_squared_distance_part, euclidean_distance
 from .neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
-from .utils import find_cpu_cores, find_cuda_cores
+from .utils import find_cpu_cores, find_max_cuda_threads
 from .decays import linear_decay, asymptotic_decay, exponential_decay
 
 # In my machine it looks like these are the best performance/memory trade-off.
 # As a rule of thumb, executing more items at a time does not decrease 
 # performance but it may increase the memory footprint without providing 
 # significant gains.
-DEFAULT_CUDA_CORE_OVERSUBSCRIPTION = 4
 DEFAULT_CPU_CORE_OVERSUBSCRIPTION = 500
 
 beginning = None
@@ -115,7 +114,7 @@ class XPySom:
         random_seed : int, optional (default=None)
             Random seed to use.
 
-        n_parallel : uint, optionam (default=4*#CUDAcores or 500*#CPUcores)
+        n_parallel : uint, optionam (default=#max_CUDA_threads or 500*#CPUcores)
             Number of samples to be processed at a time. Setting a too low 
             value may drastically lower performance due to under-utilization,
             setting a too high value increases memory usage without granting 
@@ -224,7 +223,7 @@ class XPySom:
 
         if n_parallel == 0:
             if self.xp.__name__ == 'cupy':
-                n_parallel = find_cuda_cores()*DEFAULT_CUDA_CORE_OVERSUBSCRIPTION    
+                n_parallel = find_max_cuda_threads()
             else:
                 n_parallel = find_cpu_cores()*DEFAULT_CPU_CORE_OVERSUBSCRIPTION  
  
