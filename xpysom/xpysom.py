@@ -305,7 +305,7 @@ class XPySom:
 
         self._activate(x_gpu)
 
-        del self._weights_gpu
+        self._weights_gpu = None
 
         if self.xp.__name__ == 'cupy':
             return self.xp.asnumpy(self._activation_map_gpu)
@@ -355,7 +355,7 @@ class XPySom:
 
         win = self._winner(x_gpu)
 
-        del self._weights_gpu
+        self._weights_gpu = None
 
         if len(win[0]) == 1:
             return (win[0].item(), win[1].item())
@@ -501,10 +501,10 @@ class XPySom:
             self._weights = self._weights_gpu
         
         # free temporary memory
+        self._sq_weights_gpu = None
         del self._numerator_gpu
         del self._denominator_gpu
         del self._activation_map_gpu
-        del self._sq_weights_gpu
         
         if verbose:
             print('\n quantization error:', self.quantization_error(data))
@@ -619,7 +619,7 @@ class XPySom:
         distances = self._distance_from_weights(data_gpu) 
 
         # free no longer needed buffers
-        del self._weights_gpu
+        self._weights_gpu = None
         del data_gpu
 
         # b2mu: best 2 matching units
