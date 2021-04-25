@@ -317,7 +317,7 @@ class XPySom:
         """Updates matrix activation_map, in this matrix
            the element i,j is the response of the neuron i,j to x"""
         if len(x_gpu.shape) == 1:
-            x_gpu = self.xp.expand_dims(x_gpu, axis=1)
+            x_gpu = self.xp.expand_dims(x_gpu, axis=0)
 
         if self._sq_weights_gpu is not None:
             self._activation_map_gpu = self._activation_distance(
@@ -369,7 +369,7 @@ class XPySom:
     def _winner(self, x_gpu):
         """Computes the coordinates of the winning neuron for the sample x"""
         if len(x_gpu.shape) == 1:
-            x_gpu = self.xp.expand_dims(x_gpu, axis=1)
+            x_gpu = self.xp.expand_dims(x_gpu, axis=0)
 
         self._activate(x_gpu)
         raveled_idxs = self._activation_map_gpu.argmin(axis=1)
