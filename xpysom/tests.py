@@ -15,7 +15,7 @@ import os
 
 class TestCupySom(unittest.TestCase):
     def setUp(self):
-        self.som = XPySom(5, 5, 1, std_coeff=np.sqrt(np.pi))
+        self.som = XPySom(5, 5, 1, std_coeff=1)
         self.minisom = MiniSom(5, 5, 1)
 
         for i in range(5):
@@ -219,7 +219,7 @@ class TestCupySom(unittest.TestCase):
 
 class TestCupySomHex(unittest.TestCase):
     def setUp(self):
-        self.som = XPySom(5, 5, 1, topology='hexagonal', std_coeff=np.sqrt(np.pi))
+        self.som = XPySom(5, 5, 1, topology='hexagonal', std_coeff=1)
         self.minisom = MiniSom(5, 5, 1, topology='hexagonal')
 
         for i in range(5):
