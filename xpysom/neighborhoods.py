@@ -65,12 +65,12 @@ def mexican_hat_rect(neigx, neigy, std_coeff, compact_support, c, sigma, xp=defa
 
     px = xp.power(nx-cx, 2, dtype=xp.float32)
     py = xp.power(ny-cy, 2, dtype=xp.float32)
-    p = px[:,:,xp.newaxis] + py[:,xp.newaxis,:]
     
     if compact_support:
-        ax *= xp.logical_and(nx > cx-sigma, nx < cx+sigma)
-        ay *= xp.logical_and(ny > cy-sigma, ny < cy+sigma)
+        px *= xp.logical_and(nx > cx-sigma, nx < cx+sigma)
+        px *= xp.logical_and(ny > cy-sigma, ny < cy+sigma)
 
+    p = px[:,:,xp.newaxis] + py[:,xp.newaxis,:]
     return xp.exp(-p/d)*(1-2/d*p)
 
 def mexican_hat_generic(xx, yy, std_coeff, compact_support, c, sigma, xp=default_xp):
@@ -87,6 +87,11 @@ def mexican_hat_generic(xx, yy, std_coeff, compact_support, c, sigma, xp=default
 
     px = xp.power(nx-cx, 2, dtype=xp.float32)
     py = xp.power(ny-cy, 2, dtype=xp.float32)
+
+    if compact_support:
+        px *= xp.logical_and(nx > cx-sigma, nx < cx+sigma)
+        px *= xp.logical_and(ny > cy-sigma, ny < cy+sigma)
+        
     p = px + py
     
     return (xp.exp(-p/d)*(1-2/d*p)).transpose((0,2,1))
