@@ -172,7 +172,7 @@ class TestCupySom(unittest.TestCase):
         cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_gauss = cp.asnumpy(gaussian_rect(self.som._neigx, self.som._neigy, self.som._std_coeff, c, 1))
+        cs_gauss = cp.asnumpy(gaussian_rect(self.som._neigx, self.som._neigy, self.som._std_coeff, False, c, 1))
 
         for i in range(len(c[0])):
             x = cp.asnumpy(c[0][i]).item()
@@ -184,7 +184,7 @@ class TestCupySom(unittest.TestCase):
         cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_mex = cp.asnumpy(mexican_hat_rect(self.som._neigx, self.som._neigy, self.som._std_coeff, c, 1))
+        cs_mex = cp.asnumpy(mexican_hat_rect(self.som._neigx, self.som._neigy, self.som._std_coeff, False, c, 1))
 
         for i in range(len(c[0])):
             x = cp.asnumpy(c[0][i]).item()
@@ -208,7 +208,7 @@ class TestCupySom(unittest.TestCase):
         cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_mex = cp.asnumpy(triangle(self.som._neigx, self.som._neigy, c, 1))
+        cs_mex = cp.asnumpy(triangle(self.som._neigx, self.som._neigy, False, c, 1))
 
         for i in range(len(c[0])):
             x = cp.asnumpy(c[0][i]).item()
@@ -237,7 +237,7 @@ class TestCupySomHex(unittest.TestCase):
         cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_gauss = cp.asnumpy(gaussian_generic(self.som._xx, self.som._yy, self.som._std_coeff, c, 1))
+        cs_gauss = cp.asnumpy(gaussian_generic(self.som._xx, self.som._yy, self.som._std_coeff, False, c, 1))
 
         for i in range(len(c[0])):
             x = cp.asnumpy(c[0][i]).item()
@@ -249,7 +249,7 @@ class TestCupySomHex(unittest.TestCase):
         cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_mex = cp.asnumpy(mexican_hat_generic(self.som._xx, self.som._yy, self.som._std_coeff, c, 1))
+        cs_mex = cp.asnumpy(mexican_hat_generic(self.som._xx, self.som._yy, self.som._std_coeff, False, c, 1))
 
         for i in range(len(c[0])):
             x = cp.asnumpy(c[0][i]).item()
