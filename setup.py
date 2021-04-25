@@ -11,7 +11,7 @@ description = 'Minimalistic implementation of batch Self Organizing Maps (SOM) f
 keywords = ['machine learning', 'neural networks', 'clustering', 'dimentionality reduction']
 
 setup(name='XPySom',
-      version='1.0.5',
+      version='1.0.6',
       description=description,
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -28,6 +28,9 @@ setup(name='XPySom',
             'cuda100': ['cupy-cuda100'],
             'cuda101': ['cupy-cuda101'],
             'cuda102': ['cupy-cuda102'],
+            'cuda110': ['cupy-cuda110'],
+            'cuda111': ['cupy-cuda111'],
+            'cuda112': ['cupy-cuda112'],
       },
       url='https://github.com/Manciukic/xpysom',
       download_url='https://github.com/Manciukic/xpysom/archive/v1.0.5.tar.gz',
