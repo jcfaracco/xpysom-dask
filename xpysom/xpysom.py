@@ -348,22 +348,39 @@ class XPySom:
 
 
     def winner(self, x):
-        """Computes the coordinates of the winning neuron for the sample x."""
+        """Computes the coordinates of the winning neurons for the samples x.
+        """
+
         x_gpu = self.xp.array(x)
         self._weights_gpu = self.xp.array(self._weights)
 
-        win = self._winner(x_gpu)
+        orig_shape = x_gpu.shape
+        if len(orig_shape) == 1:
+            x_gpu = self.xp.expand_dims(x_gpu, axis=0)
+
+        winners_chunks = []
+        for i in range(0, len(x), self._n_parallel):
+            start = i
+            end = start + self._n_parallel
+            if end > len(x):
+                end = len(x)
+
+            chunk = self._winner(x_gpu[start:end])
+            winners_chunks.append(self.xp.vstack(chunk))
+
+        winners_gpu = self.xp.hstack(winners_chunks)
 
         self._weights_gpu = None
 
-        if len(win[0]) == 1:
-            return (win[0].item(), win[1].item())
-
         if self.xp.__name__ == 'cupy':
-            return self.xp.asnumpy(win)
+            winners = self.xp.asnumpy(winners_gpu)
         else:
-            return win
-
+            winners = winners_gpu
+        
+        if len(orig_shape) == 1:
+            return (winners[0].item(), winners[1].item())
+        else:
+            return list(map(tuple, winners.T))
 
     def _winner(self, x_gpu):
         """Computes the coordinates of the winning neuron for the sample x"""
@@ -711,23 +728,23 @@ class XPySom:
         """
         Returns a matrix where the element i,j is the number of times
         that the neuron i,j have been winner.
-        TODO: unoptimized
         """
         self._check_input_len(data)
         a = np.zeros((self._weights.shape[0], self._weights.shape[1]))
-        for x in data:
-            a[self.winner(x)] += 1
+        winners = self.winner(data)
+        for win in winners:
+            a[win] += 1
         return a
 
     def win_map(self, data):
         """Returns a dictionary wm where wm[(i,j)] is a list
         with all the patterns that have been mapped in the position i,j.
-        TODO: unoptimized
         """
         self._check_input_len(data)
         winmap = defaultdict(list)
-        for x in data:
-            winmap[self.winner(x)].append(x)
+        winners = self.winner(data)
+        for x, win in zip(data, winners):
+            winmap[win].append(x)
         return winmap
 
     def labels_map(self, data, labels):
@@ -743,14 +760,14 @@ class XPySom:
         label : np.array or list
             Labels for each sample in data.
 
-        TODO: unoptimized
         """
         self._check_input_len(data)
         if not len(data) == len(labels):
             raise ValueError('data and labels must have the same length.')
         winmap = defaultdict(list)
-        for x, l in zip(data, labels):
-            winmap[self.winner(x)].append(l)
+        winners = self.winner(data)
+        for win, l in zip(winners, labels):
+            winmap[win].append(l)
         for position in winmap:
             winmap[position] = Counter(winmap[position])
         return winmap
