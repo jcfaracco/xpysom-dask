@@ -14,8 +14,9 @@ import pickle
 import os
 
 class TestCupySom(unittest.TestCase):
-    def setUp(self):
-        self.som = XPySom(5, 5, 1, std_coeff=1)
+    def setUp(self, xp=cp):
+        self.xp = xp
+        self.som = XPySom(5, 5, 1, std_coeff=1, xp=xp)
         self.minisom = MiniSom(5, 5, 1)
 
         for i in range(5):
@@ -144,7 +145,9 @@ class TestCupySom(unittest.TestCase):
     def test_euclidean_distance(self):
         x = np.random.rand(100, 20)
         w = np.random.rand(10,10,20)
-        cs_dist = cp.asnumpy(euclidean_squared_distance(cp.array(x), cp.array(w)))
+        cs_dist = euclidean_squared_distance(self.xp.array(x), self.xp.array(w), xp=self.xp)
+        if self.xp.__name__ == 'cupy':
+            cs_dist = cp.asnumpy(cs_dist)
         cs_dist = cs_dist.reshape((100,10,10))
         for i, sample in enumerate(x):
             ms_dist = self.minisom._euclidean_distance(sample, w)**2
@@ -153,7 +156,9 @@ class TestCupySom(unittest.TestCase):
     def test_cosine_distance(self):
         x = np.random.rand(100, 20)
         w = np.random.rand(10,10,20)
-        cs_dist = cp.asnumpy(cosine_distance(cp.array(x), cp.array(w)))
+        cs_dist = cosine_distance(self.xp.array(x), self.xp.array(w), xp=self.xp)
+        if self.xp.__name__ == 'cupy':
+            cs_dist = cp.asnumpy(cs_dist)
         cs_dist = cs_dist.reshape((100,10,10))
         for i, sample in enumerate(x):
             ms_dist = self.minisom._cosine_distance(sample, w)
@@ -162,64 +167,82 @@ class TestCupySom(unittest.TestCase):
     def test_manhattan_distance(self):
         x = np.random.rand(100, 20)
         w = np.random.rand(10,10,20)
-        cs_dist = cp.asnumpy(manhattan_distance(cp.array(x), cp.array(w)))
+        cs_dist = manhattan_distance(self.xp.array(x), self.xp.array(w), xp=self.xp)
+        if self.xp.__name__ == 'cupy':
+            cs_dist = cp.asnumpy(cs_dist)
         cs_dist = cs_dist.reshape((100,10,10))
         for i, sample in enumerate(x):
             ms_dist = self.minisom._manhattan_distance(sample, w)
             np.testing.assert_array_almost_equal(ms_dist, cs_dist[i])
 
     def test_gaussian(self):
-        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        cx, cy = self.xp.meshgrid(self.xp.arange(5), self.xp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_gauss = cp.asnumpy(gaussian_rect(self.som._neigx, self.som._neigy, self.som._std_coeff, False, c, 1))
+        cs_gauss = gaussian_rect(self.som._neigx, self.som._neigy, self.som._std_coeff, False, c, 1, xp=self.xp)
+
+        if self.xp.__name__ == 'cupy':
+            cs_gauss = cp.asnumpy(cs_gauss)
 
         for i in range(len(c[0])):
-            x = cp.asnumpy(c[0][i]).item()
-            y = cp.asnumpy(c[1][i]).item()
+            x = c[0][i].item()
+            y = c[1][i].item()
             ms_gauss = self.minisom._gaussian((x,y), 1)
             np.testing.assert_array_almost_equal(ms_gauss, cs_gauss[i])
 
     def test_mexican_hat(self):
-        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        cx, cy = self.xp.meshgrid(self.xp.arange(5), self.xp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_mex = cp.asnumpy(mexican_hat_rect(self.som._neigx, self.som._neigy, self.som._std_coeff, False, c, 1))
+        cs_mex = mexican_hat_rect(self.som._neigx, self.som._neigy, self.som._std_coeff, False, c, 1, xp=self.xp)
+
+        if self.xp.__name__ == 'cupy':
+            cs_mex = cp.asnumpy(cs_mex)
 
         for i in range(len(c[0])):
-            x = cp.asnumpy(c[0][i]).item()
-            y = cp.asnumpy(c[1][i]).item()
+            x = c[0][i].item()
+            y = c[1][i].item()
             ms_mex = self.minisom._mexican_hat((x,y), 1)
             np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])
 
     def test_bubble(self):
-        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        cx, cy = self.xp.meshgrid(self.xp.arange(5), self.xp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_mex = cp.asnumpy(bubble(self.som._neigx, self.som._neigy, c, 1))
+        cs_bub = bubble(self.som._neigx, self.som._neigy, c, 1, xp=self.xp)
+
+        if self.xp.__name__ == 'cupy':
+            cs_bub = cp.asnumpy(cs_bub)
 
         for i in range(len(c[0])):
-            x = cp.asnumpy(c[0][i]).item()
-            y = cp.asnumpy(c[1][i]).item()
-            ms_mex = self.minisom._bubble((x,y), 1)
-            np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])
+            x = c[0][i].item()
+            y = c[1][i].item()
+            ms_bub = self.minisom._bubble((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_bub, cs_bub[i])
 
     def test_triangle(self):
-        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        cx, cy = self.xp.meshgrid(self.xp.arange(5), self.xp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_mex = cp.asnumpy(triangle(self.som._neigx, self.som._neigy, False, c, 1))
+        cs_tri = triangle(self.som._neigx, self.som._neigy, False, c, 1, xp=self.xp)
+
+        if self.xp.__name__ == 'cupy':
+            cs_tri = cp.asnumpy(cs_tri)
 
         for i in range(len(c[0])):
-            x = cp.asnumpy(c[0][i]).item()
-            y = cp.asnumpy(c[1][i]).item()
-            ms_mex = self.minisom._triangle((x,y), 1)
-            np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])
+            x = c[0][i].item()
+            y = c[1][i].item()
+            ms_tri = self.minisom._triangle((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_tri, cs_tri[i])
 
+class TestNumpySom(TestCupySom):
+    def setUp(self):
+        TestCupySom.setUp(self, xp=np)
 
 class TestCupySomHex(unittest.TestCase):
-    def setUp(self):
-        self.som = XPySom(5, 5, 1, topology='hexagonal', std_coeff=1)
+    def setUp(self, xp=cp):
+        self.xp = xp
+        self.som = XPySom(5, 5, 1, topology='hexagonal', std_coeff=1, xp=xp)
         self.minisom = MiniSom(5, 5, 1, topology='hexagonal')
 
         for i in range(5):
@@ -234,37 +257,50 @@ class TestCupySomHex(unittest.TestCase):
         cp.random.seed(1234)
 
     def test_gaussian(self):
-        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        cx, cy = self.xp.meshgrid(self.xp.arange(5), self.xp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_gauss = cp.asnumpy(gaussian_generic(self.som._xx, self.som._yy, self.som._std_coeff, False, c, 1))
+        cs_gauss = gaussian_generic(self.som._xx, self.som._yy, self.som._std_coeff, False, c, 1, xp=self.xp)
+
+        if self.xp.__name__ == 'cupy':
+            cs_gauss = cp.asnumpy(cs_gauss)
 
         for i in range(len(c[0])):
-            x = cp.asnumpy(c[0][i]).item()
-            y = cp.asnumpy(c[1][i]).item()
+            x = c[0][i].item()
+            y = c[1][i].item()
             ms_gauss = self.minisom._gaussian((x,y), 1)
             np.testing.assert_array_almost_equal(ms_gauss, cs_gauss[i])
 
     def test_mexican_hat(self):
-        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        cx, cy = self.xp.meshgrid(self.xp.arange(5), self.xp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_mex = cp.asnumpy(mexican_hat_generic(self.som._xx, self.som._yy, self.som._std_coeff, False, c, 1))
+        cs_mex = mexican_hat_generic(self.som._xx, self.som._yy, self.som._std_coeff, False, c, 1, xp=self.xp)
+
+        if self.xp.__name__ == 'cupy':
+            cs_mex = cp.asnumpy(cs_mex)
 
         for i in range(len(c[0])):
-            x = cp.asnumpy(c[0][i]).item()
-            y = cp.asnumpy(c[1][i]).item()
+            x = c[0][i].item()
+            y = c[1][i].item()
             ms_mex = self.minisom._mexican_hat((x,y), 1)
             np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])
 
     def test_bubble(self):
-        cx, cy = cp.meshgrid(cp.arange(5), cp.arange(5))
+        cx, cy = self.xp.meshgrid(self.xp.arange(5), self.xp.arange(5))
         c = (cx.flatten(), cy.flatten())        
 
-        cs_mex = cp.asnumpy(bubble(self.som._neigx, self.som._neigy, c, 1))
+        cs_bub = bubble(self.som._neigx, self.som._neigy, c, 1, xp=self.xp)
+
+        if self.xp.__name__ == 'cupy':
+            cs_bub = cp.asnumpy(cs_bub)
 
         for i in range(len(c[0])):
-            x = cp.asnumpy(c[0][i]).item()
-            y = cp.asnumpy(c[1][i]).item()
-            ms_mex = self.minisom._bubble((x,y), 1)
-            np.testing.assert_array_almost_equal(ms_mex, cs_mex[i])            
+            x = c[0][i].item()
+            y = c[1][i].item()
+            ms_bub = self.minisom._bubble((x,y), 1)
+            np.testing.assert_array_almost_equal(ms_bub, cs_bub[i])            
+
+class TestNumpySomHex(TestCupySomHex):
+    def setUp(self):
+        TestCupySom.setUp(self, xp=np)
