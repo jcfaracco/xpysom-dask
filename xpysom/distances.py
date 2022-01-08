@@ -36,9 +36,10 @@ def euclidean_distance(x, w, w_flat_sq=None, xp=default_xp):
 
     NB: result shape is (N,X*Y)
     """
+    dist = xp.nan_to_num(euclidean_squared_distance(x, w, w_flat_sq, xp))
     return xp.nan_to_num(
         xp.sqrt(
-            euclidean_squared_distance(x, w, w_flat_sq, xp)
+            xp.where(dist < 0, abs(dist), dist)
         )
     )
 

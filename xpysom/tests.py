@@ -2,19 +2,23 @@ from math import sqrt, ceil
 import unittest
 
 import numpy as np
-import cupy as cp
+
+try:
+    import cupy as cp
+except:
+    print("WARNING: CuPy could not be imported!")
 
 from minisom import MiniSom
 
-from .xpysom import XPySom
-from .distances import cosine_distance, manhattan_distance, euclidean_squared_distance
-from .neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
+from xpysom import XPySom
+from xpysom.distances import cosine_distance, manhattan_distance, euclidean_squared_distance
+from xpysom.neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
 
 import pickle
 import os
 
 class TestCupySom(unittest.TestCase):
-    def setUp(self, xp=cp):
+    def setUp(self, xp=np):
         self.xp = xp
         self.som = XPySom(5, 5, 1, std_coeff=1, xp=xp)
         self.minisom = MiniSom(5, 5, 1)
@@ -28,7 +32,9 @@ class TestCupySom(unittest.TestCase):
         self.som._weights[1, 1] = 2.0
         
         np.random.seed(1234)
-        cp.random.seed(1234)
+
+        if self.xp.__name__ == 'cupy':
+            cp.random.seed(1234)
 
 
     def test_unavailable_neigh_function(self):
@@ -240,7 +246,7 @@ class TestNumpySom(TestCupySom):
         TestCupySom.setUp(self, xp=np)
 
 class TestCupySomHex(unittest.TestCase):
-    def setUp(self, xp=cp):
+    def setUp(self, xp=np):
         self.xp = xp
         self.som = XPySom(5, 5, 1, topology='hexagonal', std_coeff=1, xp=xp)
         self.minisom = MiniSom(5, 5, 1, topology='hexagonal')
@@ -254,7 +260,9 @@ class TestCupySomHex(unittest.TestCase):
         self.som._weights[1, 1] = 2.0
         
         np.random.seed(1234)
-        cp.random.seed(1234)
+
+        if self.xp.__name__ == 'cupy':
+            cp.random.seed(1234)
 
     def test_gaussian(self):
         cx, cy = self.xp.meshgrid(self.xp.arange(5), self.xp.arange(5))

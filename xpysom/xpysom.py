@@ -17,6 +17,15 @@ except:
     print("WARNING: CuPy could not be imported")
     default_xp = np
 
+try:
+    import dask
+    import dask.array as da
+    import dask.delayed as dd
+    default_da = True
+except:
+    print("WARNING: Dask Arrays could not be imported")
+    default_da = False
+
 from .distances import cosine_distance, manhattan_distance, euclidean_squared_distance, euclidean_squared_distance_part, euclidean_distance
 from .neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
 from .utils import find_cpu_cores, find_max_cuda_threads
@@ -61,7 +70,8 @@ class XPySom:
                  topology='rectangular', 
                  activation_distance='euclidean', 
                  random_seed=None, n_parallel=0, compact_support=False,
-                 xp=default_xp):
+                 xp=default_xp,
+                 use_dask=False, dask_chunks='auto'):
         """Initializes a Self Organizing Maps.
 
         A rule of thumb to set the size of the grid for a dimensionality
@@ -130,6 +140,12 @@ class XPySom:
         compact_support: bool, optional (default=False)
             Cut the neighbor function to 0 beyond neighbor radius sigma
 
+        use_dask: bool, optional (default=False)
+            Use a distributed SOM based on Dask clustering
+
+        dask_chunks: tuple, optional (default='auto')
+            The size of the data chunks that it will be splited up
+
         """
 
         if sigma >= x or sigma >= y:
@@ -139,9 +155,13 @@ class XPySom:
 
         self.xp = xp
 
+        # Use dask for clustering SOM
+        self.use_dask = use_dask & default_da
+        self.dask_chunks = dask_chunks
+
         self._learning_rate = learning_rate
         self._learning_rateN = learning_rateN
-        
+
         if sigma == 0:
             self._sigma = min(x,y)/2
         else:
@@ -229,7 +249,7 @@ class XPySom:
  
             if n_parallel == 0:
                 raise ValueError("n_parallel was not specified and could not be infered from system")
-        
+
         self._n_parallel = n_parallel
 
     
@@ -260,7 +280,7 @@ class XPySom:
             }
         else:
             neig_functions = {}
-        
+
         return neig_functions
 
 
@@ -351,7 +371,11 @@ class XPySom:
         """Computes the coordinates of the winning neurons for the samples x.
         """
 
-        x_gpu = self.xp.array(x)
+        if self.use_dask:
+            x_gpu = da.from_array(self.xp.array(x))
+        else:
+            x_gpu = self.xp.array(x)
+
         self._weights_gpu = self.xp.array(self._weights)
 
         orig_shape = x_gpu.shape
@@ -359,14 +383,19 @@ class XPySom:
             x_gpu = self.xp.expand_dims(x_gpu, axis=0)
 
         winners_chunks = []
-        for i in range(0, len(x), self._n_parallel):
-            start = i
-            end = start + self._n_parallel
-            if end > len(x):
-                end = len(x)
 
-            chunk = self._winner(x_gpu[start:end])
-            winners_chunks.append(self.xp.vstack(chunk))
+        if self.use_dask:
+            chunk = da.map_blocks(self._winner, x_gpu, dtype=self.xp.float32)
+            winners_chunks.append(self.xp.vstack(chunk.compute()))
+        else:
+            for i in range(0, len(x), self._n_parallel):
+                start = i
+                end = start + self._n_parallel
+                if end > len(x):
+                    end = len(x)
+
+                chunk = self._winner(x_gpu[start:end])
+                winners_chunks.append(self.xp.vstack(chunk))
 
         winners_gpu = self.xp.hstack(winners_chunks)
 
@@ -376,7 +405,7 @@ class XPySom:
             winners = self.xp.asnumpy(winners_gpu)
         else:
             winners = winners_gpu
-        
+
         if len(orig_shape) == 1:
             return (winners[0].item(), winners[1].item())
         else:
@@ -389,7 +418,7 @@ class XPySom:
 
         self._activate(x_gpu)
         raveled_idxs = self._activation_map_gpu.argmin(axis=1)
-        return (self._unravel_precomputed[0][raveled_idxs], self._unravel_precomputed[1][raveled_idxs])
+        return np.asarray([self._unravel_precomputed[0][raveled_idxs], self._unravel_precomputed[1][raveled_idxs]])
 
 
     def _update(self, x_gpu, wins, eta, sig):
@@ -404,15 +433,17 @@ class XPySom:
         t : int
             Iteration index
         """
-        
+
         g_gpu = self.neighborhood(wins, sig, xp=self.xp)*eta
 
         sum_g_gpu = self.xp.sum(g_gpu, axis=0)
         g_flat_gpu = g_gpu.reshape(g_gpu.shape[0], -1)
         gT_dot_x_flat_gpu = self.xp.dot(g_flat_gpu.T, x_gpu)
 
-        self._numerator_gpu += gT_dot_x_flat_gpu.reshape(self._numerator_gpu.shape)
-        self._denominator_gpu += sum_g_gpu[:,:,self.xp.newaxis]
+        _numerator_gpu = gT_dot_x_flat_gpu.reshape(self._weights.shape)
+        _denominator_gpu = sum_g_gpu[:,:,self.xp.newaxis]
+        
+        return _numerator_gpu, _denominator_gpu
 
 
     def _merge_updates(self):
@@ -455,8 +486,12 @@ class XPySom:
 
         # Copy arrays to device
         self._weights_gpu = self.xp.asarray(self._weights, dtype=self.xp.float32)
-        data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
-        
+
+        if self.use_dask:
+            data_gpu = da.from_array(self.xp.asarray(data, dtype=self.xp.float32), chunks=self.dask_chunks)
+        else:
+            data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
+
         if verbose:
             print_progress(-1, num_epochs*len(data))
 
@@ -494,20 +529,50 @@ class XPySom:
             # sigma and learning rate decrease with the same rule
             sig = self._decay_function(self._sigma, self._sigmaN, iteration, num_epochs)
 
-            for i in range(0, len(data), self._n_parallel):
-                start = i
-                end = start + self._n_parallel
-                if end > len(data):
-                    end = len(data)
+            if self.use_dask:
+                blocks = data_gpu.to_delayed().ravel()
 
-                self._update(data_gpu[start:end], self._winner(data_gpu[start:end]), eta, sig)
+                @dask.delayed(nout=2)
+                def update_block(block):
+                    winner_gpu = self._winner(block)
 
-                if verbose:
-                    print_progress(
-                        iteration*len(data)+end-1, 
-                        num_epochs*len(data)
-                    )
-                    
+                    _numerator_gpu, _denominator_gpu = self._update(block, winner_gpu, eta, sig)
+
+                    return _numerator_gpu, _denominator_gpu
+
+                _numerator_gpu = []
+                _denominator_gpu = []
+                for b in blocks:
+                    x, y = update_block(b)
+                    _numerator_gpu.append(x)
+                    _denominator_gpu.append(y)
+
+                self._numerator_gpu = dd(sum)(_numerator_gpu)
+                self._denominator_gpu = dd(sum)(_denominator_gpu)
+
+                self._denominator_gpu.visualize(filename="update.svg")
+
+                self._numerator_gpu = self._numerator_gpu.compute()
+                self._denominator_gpu = self._denominator_gpu.compute()
+
+            else:
+                for i in range(0, len(data), self._n_parallel):
+                    start = i
+                    end = start + self._n_parallel
+                    if end > len(data):
+                        end = len(data)
+
+                    _numerator_gpu, _denominator_gpu = self._update(data_gpu[start:end], self._winner(data_gpu[start:end]), eta, sig)
+
+                    self._numerator_gpu += _numerator_gpu
+                    self._denominator_gpu += _denominator_gpu
+
+                    if verbose:
+                        print_progress(
+                            iteration*len(data)+end-1,
+                            num_epochs*len(data)
+                        )
+
             self._merge_updates()
 
         # Copy back arrays to host
@@ -515,13 +580,15 @@ class XPySom:
             self._weights = self.xp.asnumpy(self._weights_gpu)
         else:
             self._weights = self._weights_gpu
-        
+
         # free temporary memory
         self._sq_weights_gpu = None
-        del self._numerator_gpu
-        del self._denominator_gpu
-        del self._activation_map_gpu
-        
+
+        if not self.use_dask:
+            del self._numerator_gpu
+            del self._denominator_gpu
+            del self._activation_map_gpu
+
         if verbose:
             print('\n quantization error:', self.quantization_error(data))
 
@@ -581,12 +648,17 @@ class XPySom:
         data[i] and the j-th weight.
         """
         distances = []
-        for start in range(0, len(data_gpu), self._n_parallel):
-            end = start + self._n_parallel
-            if end > len(data_gpu):
-                end = len(data_gpu)
-            
-            distances.append(euclidean_distance(data_gpu[start:end], self._weights_gpu, xp=self.xp))
+        if self.use_dask:
+            dist = da.map_blocks(euclidean_distance, data_gpu, self._weights_gpu, xp=self.xp, dtype=self.xp.float32)
+            distances.append(dist.compute())
+        else:
+            for start in range(0, len(data_gpu), self._n_parallel):
+                end = start + self._n_parallel
+                if end > len(data_gpu):
+                    end = len(data_gpu)
+
+                distances.append(euclidean_distance(data_gpu[start:end], self._weights_gpu, xp=self.xp))
+
         return self.xp.vstack(distances)
 
     def quantization_error(self, data):
@@ -605,7 +677,7 @@ class XPySom:
         del self._weights_gpu
 
         qe = self.xp.linalg.norm(data_gpu, axis=1).mean()
-        
+
         # free no longer needed buffer
         del data_gpu
 
