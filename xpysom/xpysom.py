@@ -430,60 +430,6 @@ class XPySom:
 
         return (_numerator_gpu, _denominator_gpu)
 
-    @dask.delayed(nout=2)
-    def _update_block(self, x_gpu_block, weights_gpu, num_epochs):
-        """Updates the numerator and denominator accumulators.
-
-        Parameters
-        ----------
-        x : np.array
-            Current pattern to learn
-        t : int
-            Iteration index
-        """
-        _numerator_gpu = self.xp.zeros(
-            weights_gpu.shape,
-            dtype=self.xp.float32
-        )
-        _denominator_gpu = self.xp.zeros(
-            (weights_gpu.shape[0], weights_gpu.shape[1],1),
-            dtype=self.xp.float32
-        )
-
-        for iteration in range(0, num_epochs):
-            if self._activation_distance in [
-                    euclidean_squared_distance,
-                    euclidean_squared_distance_part,
-                    cosine_distance
-            ]:
-                self._sq_weights_gpu = (
-                    self.xp.power(
-                        weights_gpu.reshape(
-                            -1, weights_gpu.shape[2]
-                        ),
-                        2
-                    ).sum(axis=1, keepdims=True)
-                )
-            else:
-                self._sq_weights_gpu = None
-
-            eta = self._decay_function(self._learning_rate, self._learning_rateN, iteration, num_epochs)
-            # sigma and learning rate decrease with the same rule
-            sig = self._decay_function(self._sigma, self._sigmaN, iteration, num_epochs)
-
-            wins = self._winner(x_gpu_block, weights_gpu)
-
-            g_gpu = self.neighborhood(wins, sig, xp=self.xp) * eta
-
-            sum_g_gpu = self.xp.sum(g_gpu, axis=0)
-            g_flat_gpu = g_gpu.reshape(g_gpu.shape[0], -1)
-            gT_dot_x_flat_gpu = self.xp.dot(g_flat_gpu.T, x_gpu_block)
-
-            _numerator_gpu += gT_dot_x_flat_gpu.reshape(weights_gpu.shape)
-            _denominator_gpu += sum_g_gpu[:,:,self.xp.newaxis]
-
-        return (_numerator_gpu, _denominator_gpu)
-
 
     def _merge_updates(self, weights_gpu, numerator_gpu, denominator_gpu):
         """
@@ -531,60 +477,57 @@ class XPySom:
         if verbose:
             print_progress(-1, num_epochs*len(data))
 
-        if self.use_dask:
-            data_gpu_block = da.from_array(data_gpu, chunks=self.dask_chunks)
+        for iteration in range(iter_beg, iter_end):
+            try: # reuse already allocated memory
+                numerator_gpu.fill(0)
+                denominator_gpu.fill(0)
+            except UnboundLocalError: # whoops, I haven't allocated it yet
+                numerator_gpu = self.xp.zeros(
+                    weights_gpu.shape,
+                    dtype=self.xp.float32
+                )
+                denominator_gpu = self.xp.zeros(
+                    (weights_gpu.shape[0], weights_gpu.shape[1],1),
+                    dtype=self.xp.float32
+                )
 
-            blocks = data_gpu_block.to_delayed().ravel()
+            if self._activation_distance in [
+                    euclidean_squared_distance,
+                    euclidean_squared_distance_part,
+                    cosine_distance
+            ]:
+                self._sq_weights_gpu = (
+                    self.xp.power(
+                        weights_gpu.reshape(
+                            -1, weights_gpu.shape[2]
+                        ),
+                        2
+                    ).sum(axis=1, keepdims=True)
+                )
+            else:
+                self._sq_weights_gpu = None
 
-            numerator_gpu_array = []
-            denominator_gpu_array = []
-            for block in blocks:
-                a, b = self._update_block(block, weights_gpu, iter_end - iter_beg)
-                numerator_gpu_array.append(a)
-                denominator_gpu_array.append(b)
+            eta = self._decay_function(self._learning_rate, self._learning_rateN, iteration, num_epochs)
+            # sigma and learning rate decrease with the same rule
+            sig = self._decay_function(self._sigma, self._sigmaN, iteration, num_epochs)
 
-            numerator_gpu_sum = dask.delayed(sum)(numerator_gpu_array)
-            denominator_gpu_sum = dask.delayed(sum)(denominator_gpu_array)
+            if self.use_dask:
+                data_gpu_block = da.from_array(data_gpu, chunks=self.dask_chunks)
 
-            numerator_gpu, denominator_gpu = dask.compute(numerator_gpu_sum, denominator_gpu_sum)
-#                numerator_gpu, denominator_gpu = numerator_gpu_sum, denominator_gpu_sum
+                blocks = data_gpu_block.to_delayed().ravel()
 
-            weights_gpu = self._merge_updates(weights_gpu, numerator_gpu, denominator_gpu)
-        else:
-            for iteration in range(iter_beg, iter_end):
-                try: # reuse already allocated memory
-                    numerator_gpu.fill(0)
-                    denominator_gpu.fill(0)
-                except UnboundLocalError: # whoops, I haven't allocated it yet
-                    numerator_gpu = self.xp.zeros(
-                        weights_gpu.shape,
-                        dtype=self.xp.float32
-                    )
-                    denominator_gpu = self.xp.zeros(
-                        (weights_gpu.shape[0], weights_gpu.shape[1],1),
-                        dtype=self.xp.float32
-                    )
+                numerator_gpu_array = []
+                denominator_gpu_array = []
+                for block in blocks:
+                    a, b = dask.delayed(self._update, nout=2)(block, weights_gpu, eta, sig)
+                    numerator_gpu_array.append(a)
+                    denominator_gpu_array.append(b)
 
-                if self._activation_distance in [
-                        euclidean_squared_distance,
-                        euclidean_squared_distance_part,
-                        cosine_distance
-                ]:
-                    self._sq_weights_gpu = (
-                        self.xp.power(
-                            weights_gpu.reshape(
-                                -1, weights_gpu.shape[2]
-                            ),
-                            2
-                        ).sum(axis=1, keepdims=True)
-                    )
-                else:
-                    self._sq_weights_gpu = None
+                numerator_gpu_sum = dask.delayed(sum)(numerator_gpu_array)
+                denominator_gpu_sum = dask.delayed(sum)(denominator_gpu_array)
 
-                eta = self._decay_function(self._learning_rate, self._learning_rateN, iteration, num_epochs)
-                # sigma and learning rate decrease with the same rule
-                sig = self._decay_function(self._sigma, self._sigmaN, iteration, num_epochs)
-
+                numerator_gpu, denominator_gpu = dask.compute(numerator_gpu_sum, denominator_gpu_sum)
+            else:
                 for i in range(0, len(data), self._n_parallel):
                     start = i
                     end = start + self._n_parallel
@@ -602,7 +545,7 @@ class XPySom:
                             num_epochs*len(data)
                         )
 
-                weights_gpu = self._merge_updates(weights_gpu, numerator_gpu, denominator_gpu)
+            weights_gpu = self._merge_updates(weights_gpu, numerator_gpu, denominator_gpu)
 
         # Copy back arrays to host
         if self.xp.__name__ == 'cupy':
