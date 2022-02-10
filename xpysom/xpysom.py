@@ -478,6 +478,8 @@ class XPySom:
         else:
             data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
 
+        print(data_gpu.shape)
+
         if verbose:
             print_progress(-1, num_epochs*len(data))
 
