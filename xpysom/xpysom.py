@@ -12,6 +12,7 @@ import os
 import numpy as np
 try:
     import cudf
+    import dask_cudf as dcudf
     import cupy as cp
     default_xp = cp
 except:
@@ -476,8 +477,10 @@ class XPySom:
         print(type(data))
         if type(data) == cudf.core.dataframe.DataFrame:
             data_gpu = data.to_cupy(dtype=self.xp.float32)
-        if type(data) == cp._core.core.ndarray:
+        elif type(data) == cp._core.core.ndarray:
             data_gpu = data.astype(self.xp.float32)
+        elif type(data) == dcudf.core.DataFrame:
+            data_gpu = data.compute().to_cupy(dtype=self.xp.float32)
         else:
             data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
 
