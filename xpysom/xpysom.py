@@ -475,6 +475,8 @@ class XPySom:
 
         if type(data) == cudf.core.dataframe.DataFrame:
             data_gpu = data.to_cupy(dtype=self.xp.float32)
+        if type(data) == cupy._core.core.ndarray:
+            data_gpu = data.astype(self.xp.float32)
         else:
             data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
 
