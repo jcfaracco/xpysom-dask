@@ -473,6 +473,7 @@ class XPySom:
         # Copy arrays to device
         weights_gpu = self.xp.asarray(self._weights, dtype=self.xp.float32)
 
+        print(type(data))
         if type(data) == cudf.core.dataframe.DataFrame:
             data_gpu = data.to_cupy(dtype=self.xp.float32)
         if type(data) == cp._core.core.ndarray:
