@@ -472,6 +472,7 @@ class XPySom:
         # Copy arrays to device
         weights_gpu = self.xp.asarray(self._weights, dtype=self.xp.float32)
 
+        print(type(data))
         data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
 
         if verbose:
