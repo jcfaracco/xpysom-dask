@@ -486,6 +486,10 @@ class XPySom:
         elif type(data) == dcudf.core.DataFrame:
             data_gpu = data.compute()
             print(type(data_gpu))
+        elif:
+            type(data) == dask.array.core.Array:
+            data_gpu = data.compute()
+            print(type(data_gpu))
         else:
             data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
 
