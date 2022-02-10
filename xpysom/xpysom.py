@@ -11,6 +11,7 @@ import os
 
 import numpy as np
 try:
+    import cudf
     import cupy as cp
     default_xp = cp
 except:
@@ -472,8 +473,10 @@ class XPySom:
         # Copy arrays to device
         weights_gpu = self.xp.asarray(self._weights, dtype=self.xp.float32)
 
-        print(type(data))
-        data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
+        if type(data) == cudf.core.dataframe.DataFrame:
+            data_gpu = data.to_cupy(dtype=self.xp.float32)
+        else:
+            data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
 
         if verbose:
             print_progress(-1, num_epochs*len(data))
