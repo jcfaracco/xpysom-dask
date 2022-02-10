@@ -479,10 +479,12 @@ class XPySom:
             data_gpu = data.to_cupy(dtype=self.xp.float32)
         elif type(data) == cp._core.core.ndarray:
             data_gpu = data.astype(self.xp.float32)
+        elif type(data) == ddf.core.DataFrame:
+            data_gpu = data.compute()
+            print(type(data_gpu))
         elif type(data) == dcudf.core.DataFrame:
             data_gpu = data.compute()
             print(type(data_gpu))
-to_cupy(dtype=self.xp.float32)
         else:
             data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
 
