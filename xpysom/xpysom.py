@@ -23,6 +23,7 @@ try:
     import dask
     import dask.array as da
     import dask.delayed as dd
+    import dask.dataframe as ddf
     default_da = True
 except:
     print("WARNING: Dask Arrays could not be imported")
