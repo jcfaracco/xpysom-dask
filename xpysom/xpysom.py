@@ -382,7 +382,7 @@ class XPySom:
             if end > len(x):
                 end = len(x)
 
-            chunk = self._winner(x_gpu[start:end])
+            chunk = self._winner(x_gpu[start:end], self._weights)
             winners_chunks.append(self.xp.vstack(chunk))
 
         winners_gpu = self.xp.hstack(winners_chunks)
