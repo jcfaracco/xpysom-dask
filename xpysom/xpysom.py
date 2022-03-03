@@ -481,7 +481,7 @@ class XPySom:
             data_gpu = data.to_cupy(dtype=self.xp.float32)
         elif GPU_SUPPORTED and type(data) == cp._core.core.ndarray:
             data_gpu = data.astype(self.xp.float32)
-        elif type(data) == ddf.core.DataFrame:
+        elif default_da and type(data) == ddf.core.DataFrame:
             data_gpu = data.compute()
         elif GPU_SUPPORTED and type(data) == dcudf.core.DataFrame:
             data_gpu = data.compute()
