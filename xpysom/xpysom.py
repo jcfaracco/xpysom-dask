@@ -15,9 +15,11 @@ try:
     import dask_cudf as dcudf
     import cupy as cp
     default_xp = cp
+    GPU_SUPPORTED=True
 except:
     print("WARNING: CuPy could not be imported")
     default_xp = np
+    GPU_SUPPORTED=False
 
 try:
     import dask
@@ -475,20 +477,16 @@ class XPySom:
         # Copy arrays to device
         weights_gpu = self.xp.asarray(self._weights, dtype=self.xp.float32)
 
-        print(type(data))
-        if type(data) == cudf.core.dataframe.DataFrame:
+        if GPU_SUPPORTED and type(data) == cudf.core.dataframe.DataFrame:
             data_gpu = data.to_cupy(dtype=self.xp.float32)
-        elif type(data) == cp._core.core.ndarray:
+        elif GPU_SUPPORTED and type(data) == cp._core.core.ndarray:
             data_gpu = data.astype(self.xp.float32)
         elif type(data) == ddf.core.DataFrame:
             data_gpu = data.compute()
-            print(type(data_gpu))
-        elif type(data) == dcudf.core.DataFrame:
+        elif GPU_SUPPORTED and type(data) == dcudf.core.DataFrame:
             data_gpu = data.compute()
-            print(type(data_gpu))
-        elif type(data) == dask.array.core.Array:
+        elif default_da and type(data) == dask.array.core.Array:
             data_gpu = data.compute()
-            print(type(data_gpu))
         else:
             data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
 
