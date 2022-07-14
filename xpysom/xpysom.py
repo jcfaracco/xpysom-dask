@@ -11,9 +11,11 @@ import os
 
 import numpy as np
 try:
+    # Cupy needs to be imported first.
+    # Cudf is crashing containers if it goes first.
+    import cupy as cp
     import cudf
     import dask_cudf as dcudf
-    import cupy as cp
     default_xp = cp
     GPU_SUPPORTED=True
 except:
@@ -387,7 +389,7 @@ class XPySom:
             if end > len(x):
                 end = len(x)
 
-            chunk = self._winner(x_gpu[start:end])
+            chunk = self._winner(x_gpu[start:end], weights_gpu)
             winners_chunks.append(self.xp.vstack(chunk))
 
         winners_gpu = self.xp.hstack(winners_chunks)
@@ -477,20 +479,30 @@ class XPySom:
         # Copy arrays to device
         weights_gpu = self.xp.asarray(self._weights, dtype=self.xp.float32)
 
-        if GPU_SUPPORTED and type(data) == cudf.core.dataframe.DataFrame:
+        if GPU_SUPPORTED and isinstance(data, cudf.core.dataframe.DataFrame):
             data_gpu = data.to_cupy(dtype=self.xp.float32)
-        elif GPU_SUPPORTED and type(data) == cp._core.core.ndarray:
+            if self.use_dask:
+                data_gpu_block = da.from_array(data_gpu, chunks=self.dask_chunks)
+        elif GPU_SUPPORTED and isinstance(data, cp._core.core.ndarray):
             data_gpu = data.astype(self.xp.float32)
-        elif default_da and type(data) == ddf.core.DataFrame:
+            if self.use_dask:
+                data_gpu_block = da.from_array(data_gpu, chunks=self.dask_chunks)
+        elif default_da and isinstance(data, ddf.core.DataFrame):
+            if self.use_dask:
+                data_gpu_block = data.to_dask_array()
+            else:
+                data_gpu = data.to_dask_array().compute()
+        elif GPU_SUPPORTED and isinstance(data, dcudf.core.DataFrame):
+            if self.use_dask:
+                data_gpu = data.to_dask_array()
             data_gpu = data.compute()
-        elif GPU_SUPPORTED and type(data) == dcudf.core.DataFrame:
-            data_gpu = data.compute()
-        elif default_da and type(data) == dask.array.core.Array:
-            data_gpu = data.compute()
+        elif default_da and isinstance(data, dask.array.core.Array):
+            if self.use_dask:
+                data_gpu_block = data
+            else:
+                data_gpu = data.compute().astype(self.xp.float32)
         else:
             data_gpu = self.xp.asarray(data, dtype=self.xp.float32)
-
-        print(data_gpu.shape)
 
         if verbose:
             print_progress(-1, num_epochs*len(data))
@@ -530,8 +542,6 @@ class XPySom:
             sig = self._decay_function(self._sigma, self._sigmaN, iteration, num_epochs)
 
             if self.use_dask:
-                data_gpu_block = da.from_array(data_gpu, chunks=self.dask_chunks)
-
                 blocks = data_gpu_block.to_delayed().ravel()
 
                 numerator_gpu_array = []
@@ -592,6 +602,19 @@ class XPySom:
         return self.train(data, num_iteration, verbose=verbose)
 
 
+    def predict(self, data):
+        def _predict(data, xp):
+            shape = (self._weights.shape[0], self._weights.shape[1])
+            winner_coordinates = xp.array([self.winner(x) for x in data]).T
+            return xp.ravel_multi_index(winner_coordinates, shape)
+
+        if default_da and type(data) == dask.array.core.Array:
+            if self.use_dask:
+                return data.map_blocks(_predict, self.xp)
+        else:
+            return _predict(data, self.xp)
+
+
     def quantization(self, data):
         """Assigns a code book (weights vector of the winning neuron)
         to each sample in data."""
@@ -645,11 +668,13 @@ class XPySom:
         self._check_input_len(data)
 
         if self.use_dask:
-            data_gpu = da.from_array(self.xp.array(data, dtype=self.xp.float32), chunks=self.dask_chunks)
+            if default_da and isinstance(data, dask.array.core.Array):
+                data_gpu = data
+            else:
+                data_gpu = da.from_array(self.xp.array(data, dtype=self.xp.float32), chunks=self.dask_chunks)
 
-            blocks = data_gpu.to_delayed().ravel()
+            blocks = data_gpu
 
-            @dask.delayed
             def _quantization_error_block(block, weights):
                 weights_gpu = self.xp.array(weights)
 
@@ -657,13 +682,10 @@ class XPySom:
 
                 return new_block
 
-            results = [da.from_delayed(_quantization_error_block(b, self._weights),
-                       shape=self.dask_chunks, dtype=self.xp.float32) for b in blocks]
-            q_error = da.concatenate(results, axis=0, allow_unknown_chunksizes=True)
+            q_error = blocks.map_blocks(_quantization_error_block, self._weights, dtype=self.xp.float32)
 
             qe_lin = da.linalg.norm(q_error, axis=1)
             qe = qe_lin.mean().compute()
-
         else:
             # load to GPU
             data_gpu = self.xp.array(data, dtype=self.xp.float32)
