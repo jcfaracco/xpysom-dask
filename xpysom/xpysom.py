@@ -254,6 +254,8 @@ class XPySom:
 
         self._n_parallel = n_parallel
 
+        self._sq_weights_gpu = None
+
     
     def get_neig_functions(self):
         """
@@ -299,9 +301,10 @@ class XPySom:
 
         Only useful if the topology chosen is not rectangular.
         """
-        if self.xp.__name__ == 'cupy':
+        if isinstance(self._xx.T, cp.ndarray) and \
+           isinstance(self._yy.T, cp.ndarray):
             # I need to transfer them to host
-            return self._xx.self.xp.asnumpy(T), self._yy.self.xp.asnumpy(T)
+            return self._xx.T.get(), self._yy.T.get()
         else:
             return self._xx.T, self._yy.T
 
@@ -312,9 +315,10 @@ class XPySom:
 
         Only useful if the topology chosen is not rectangular.
         """
-        if self.xp.__name__ == 'cupy':
+        if isinstance(self._xx.T, cp.ndarray) and \
+           isinstance(self._yy.T, cp.ndarray):
             # I need to transfer them to host
-            return self._xx.self.xp.asnumpy(T)[xy], self._yy.self.xp.asnumpy(T)[xy]
+            return self._xx.T.get()[xy], self._yy.T.get()[xy]
         else:
             return self._xx.T[xy], self._yy.T[xy]
 
@@ -326,8 +330,8 @@ class XPySom:
 
         self._activate(x_gpu, weights_gpu)
 
-        if self.xp.__name__ == 'cupy':
-            return self.xp.asnumpy(self._activation_map_gpu)
+        if isinstance(self._activation_map_gpu, cp.ndarray):
+            return self._activation_map_gpu.get()
         else:
             return self._activation_map_gpu
 
@@ -380,7 +384,10 @@ class XPySom:
 
         orig_shape = x_gpu.shape
         if len(orig_shape) == 1:
-            x_gpu = self.xp.expand_dims(x_gpu, axis=0)
+            if isinstance(x_gpu, da.core.Array):
+                x_gpu = da.expand_dims(x_gpu, axis=0).compute()
+            else:
+                x_gpu = self.xp.expand_dims(x_gpu, axis=0)
 
         winners_chunks = []
         for i in range(0, len(x), self._n_parallel):
@@ -394,8 +401,8 @@ class XPySom:
 
         winners_gpu = self.xp.hstack(winners_chunks)
 
-        if self.xp.__name__ == 'cupy':
-            winners = self.xp.asnumpy(winners_gpu)
+        if isinstance(winners_gpu, cp.ndarray):
+            winners = winners_gpu.get()
         else:
             winners = winners_gpu
 
@@ -424,6 +431,8 @@ class XPySom:
         t : int
             Iteration index
         """
+        weights_gpu = self.xp.asarray(weights_gpu)
+
         wins = self._winner(x_gpu, weights_gpu)
 
         g_gpu = self.neighborhood(wins, sig, xp=self.xp)*eta
@@ -496,7 +505,7 @@ class XPySom:
             if self.use_dask:
                 data_gpu = data.to_dask_array()
             data_gpu = data.compute()
-        elif default_da and isinstance(data, dask.array.core.Array):
+        elif default_da and isinstance(data, da.core.Array):
             if self.use_dask:
                 data_gpu_block = data
             else:
@@ -576,8 +585,8 @@ class XPySom:
             weights_gpu = self._merge_updates(weights_gpu, numerator_gpu, denominator_gpu)
 
         # Copy back arrays to host
-        if self.xp.__name__ == 'cupy':
-            self._weights = self.xp.asnumpy(weights_gpu)
+        if isinstance(weights_gpu, cp.ndarray):
+            self._weights = weights_gpu.get()
         else:
             self._weights = weights_gpu
 
@@ -589,6 +598,8 @@ class XPySom:
 
         if verbose:
             print('\n quantization error:', self.quantization_error(data))
+
+        return self
 
 
     def train_batch(self, data, num_iteration, verbose=False):
@@ -606,13 +617,12 @@ class XPySom:
         def _predict(data, xp):
             shape = (self._weights.shape[0], self._weights.shape[1])
             winner_coordinates = xp.array([self.winner(x) for x in data]).T
-            return xp.ravel_multi_index(winner_coordinates, shape)
+            return xp.asarray(xp.ravel_multi_index(winner_coordinates, shape))
 
-        if default_da and type(data) == dask.array.core.Array:
+        if default_da and isinstance(data, da.core.Array):
             if self.use_dask:
-                return data.map_blocks(_predict, self.xp)
-        else:
-            return _predict(data, self.xp)
+                return data.map_blocks(_predict, self.xp, dtype=self.xp.float32, meta=self.xp.array((), dtype=self.xp.float32))
+        return _predict(data, self.xp)
 
 
     def quantization(self, data):
@@ -620,10 +630,10 @@ class XPySom:
         to each sample in data."""
         
         data_gpu = self.xp.array(data)
-        qnt = self._quantization(data_gpu)
+        qnt = self._quantization(data_gpu, self.xp.array(self._weights))
 
-        if self.xp.__name__ == 'cupy':
-            return self.xp.asnumpy(qnt)
+        if isinstance(qnt, cp.ndarray):
+            return qnt.get()
         else:
             return qnt
 
@@ -644,8 +654,8 @@ class XPySom:
         weights_gpu = self.xp.array(self._weights)
         d = self._distance_from_weights(data_gpu, weights_gpu)
 
-        if self.xp.__name__ == 'cupy':
-            return self.xp.asnumpy(d)
+        if isinstance(d, cp.ndarray):
+            return d.get()
         else:
             return d
 
@@ -668,7 +678,7 @@ class XPySom:
         self._check_input_len(data)
 
         if self.use_dask:
-            if default_da and isinstance(data, dask.array.core.Array):
+            if default_da and isinstance(data, da.core.Array):
                 data_gpu = data
             else:
                 data_gpu = da.from_array(self.xp.array(data, dtype=self.xp.float32), chunks=self.dask_chunks)

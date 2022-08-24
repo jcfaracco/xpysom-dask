@@ -68,7 +68,7 @@ class TestCupySom(unittest.TestCase):
     def test_distance_from_weights(self):
         data = np.arange(-5, 5).reshape(-1, 1)
         weights = self.som._weights.reshape(-1, self.som._weights.shape[2])
-        distances = self.som.distance_from_weights(data)
+        distances = self.som.distance_from_weights(data, weights)
         for i in range(len(data)):
             for j in range(len(weights)):
                 assert(distances[i][j] == np.linalg.norm(data[i] - weights[j]))
