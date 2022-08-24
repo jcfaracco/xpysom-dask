@@ -301,12 +301,13 @@ class XPySom:
 
         Only useful if the topology chosen is not rectangular.
         """
-        if isinstance(self._xx.T, cp.ndarray) and \
-           isinstance(self._yy.T, cp.ndarray):
-            # I need to transfer them to host
-            return self._xx.T.get(), self._yy.T.get()
-        else:
-            return self._xx.T, self._yy.T
+        if GPU_SUPPORTED:
+            if isinstance(self._xx.T, cp.ndarray) and \
+               isinstance(self._yy.T, cp.ndarray):
+                # I need to transfer them to host
+                return self._xx.T.get(), self._yy.T.get()
+
+        return self._xx.T, self._yy.T
 
 
     def convert_map_to_euclidean(self, xy):
@@ -315,12 +316,13 @@ class XPySom:
 
         Only useful if the topology chosen is not rectangular.
         """
-        if isinstance(self._xx.T, cp.ndarray) and \
-           isinstance(self._yy.T, cp.ndarray):
-            # I need to transfer them to host
-            return self._xx.T.get()[xy], self._yy.T.get()[xy]
-        else:
-            return self._xx.T[xy], self._yy.T[xy]
+        if GPU_SUPPORTED:
+            if isinstance(self._xx.T, cp.ndarray) and \
+               isinstance(self._yy.T, cp.ndarray):
+                # I need to transfer them to host
+                return self._xx.T.get()[xy], self._yy.T.get()[xy]
+
+        return self._xx.T[xy], self._yy.T[xy]
 
 
     def activate(self, x):
@@ -330,7 +332,7 @@ class XPySom:
 
         self._activate(x_gpu, weights_gpu)
 
-        if isinstance(self._activation_map_gpu, cp.ndarray):
+        if GPU_SUPPORTED and isinstance(self._activation_map_gpu, cp.ndarray):
             return self._activation_map_gpu.get()
         else:
             return self._activation_map_gpu
@@ -401,7 +403,7 @@ class XPySom:
 
         winners_gpu = self.xp.hstack(winners_chunks)
 
-        if isinstance(winners_gpu, cp.ndarray):
+        if GPU_SUPPORTED and isinstance(winners_gpu, cp.ndarray):
             winners = winners_gpu.get()
         else:
             winners = winners_gpu
@@ -585,7 +587,7 @@ class XPySom:
             weights_gpu = self._merge_updates(weights_gpu, numerator_gpu, denominator_gpu)
 
         # Copy back arrays to host
-        if isinstance(weights_gpu, cp.ndarray):
+        if GPU_SUPPORTED and isinstance(weights_gpu, cp.ndarray):
             self._weights = weights_gpu.get()
         else:
             self._weights = weights_gpu
@@ -632,7 +634,7 @@ class XPySom:
         data_gpu = self.xp.array(data)
         qnt = self._quantization(data_gpu, self.xp.array(self._weights))
 
-        if isinstance(qnt, cp.ndarray):
+        if GPU_SUPPORTED and isinstance(qnt, cp.ndarray):
             return qnt.get()
         else:
             return qnt
@@ -654,7 +656,7 @@ class XPySom:
         weights_gpu = self.xp.array(self._weights)
         d = self._distance_from_weights(data_gpu, weights_gpu)
 
-        if isinstance(d, cp.ndarray):
+        if GPU_SUPPORTED and isinstance(d, cp.ndarray):
             return d.get()
         else:
             return d
