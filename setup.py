@@ -22,7 +22,7 @@ setup(name='XPySom-dask',
       package_data={'': ['README.md']},
       include_package_data=True,
       license="Creative Commons Attribution 3.0 Unported",
-      packages=['xpysom-dask'],
+      packages=['xpysom_dask'],
       install_requires=['numpy'],
       extras_require={
             'cuda100': ['cupy-cuda100'],
