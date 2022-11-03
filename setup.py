@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from setuptools import setup
 
-xpysom_version = '1.0.7.1'
+xpysom_version = '1.0.7.2'
 
 # read the contents of your README file
 from os import path
