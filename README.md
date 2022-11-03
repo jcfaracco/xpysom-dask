@@ -75,17 +75,7 @@ Differences with MiniSom
  - **Hexagonal** grid support is **experimental** and is significantly slower than rectangular grid.  
 
 
-License
+Authors
 ---------------------
 
-XPySom-dask:
 Copyright (C) 2021 Julio Faracco
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-XPySom is a modification of the original MiniSom by Giuseppe Vettigli, 
-which is licensed under the Creative Commons Attribution 3.0 Unported License
-and can be found at the following [link](https://github.com/JustGlowing/minisom).
