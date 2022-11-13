@@ -59,13 +59,13 @@ def cosine_distance(x, w, w_sq=None, xp=default_xp):
 
 if _cupy_available:
     _manhattan_distance_kernel = cp.ReductionKernel(
-        'T x, T w',
-        'T y',
-        'abs(x-w)',
-        'a+b',
-        'y = a',
-        '0',
-        'l1norm'
+        'T x, T w', # input params
+        'T y',      # output params
+        'abs(x-w)', # map
+        'a+b',      # reduce
+        'y = a',    # post=reduction map
+        '0',        # identity value
+        'l1norm'    # kernel name
     )
 
 def manhattan_distance(x, w, xp=default_xp):
