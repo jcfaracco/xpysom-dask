@@ -2,7 +2,11 @@ from math import sqrt, ceil
 import unittest
 
 import numpy as np
-import cupy as cp
+try:
+    import cupy as cp
+except Exception as e:
+    cp = np
+    print("cupy can't be imported", e)
 
 from minisom import MiniSom
 
@@ -145,7 +149,8 @@ class TestCupySom(unittest.TestCase):
     def test_euclidean_distance(self):
         x = np.random.rand(100, 20)
         w = np.random.rand(10,10,20)
-        cs_dist = euclidean_squared_distance(self.xp.array(x), self.xp.array(w), xp=self.xp)
+        w_flat = w.reshape(-1, w.shape[2])
+        cs_dist = euclidean_squared_distance(self.xp.array(x), self.xp.array(w_flat), xp=self.xp)
         if self.xp.__name__ == 'cupy':
             cs_dist = cp.asnumpy(cs_dist)
         cs_dist = cs_dist.reshape((100,10,10))
@@ -156,7 +161,8 @@ class TestCupySom(unittest.TestCase):
     def test_cosine_distance(self):
         x = np.random.rand(100, 20)
         w = np.random.rand(10,10,20)
-        cs_dist = cosine_distance(self.xp.array(x), self.xp.array(w), xp=self.xp)
+        w_flat = w.reshape(-1, w.shape[2])
+        cs_dist = cosine_distance(self.xp.array(x), self.xp.array(w_flat), xp=self.xp)
         if self.xp.__name__ == 'cupy':
             cs_dist = cp.asnumpy(cs_dist)
         cs_dist = cs_dist.reshape((100,10,10))
@@ -167,7 +173,8 @@ class TestCupySom(unittest.TestCase):
     def test_manhattan_distance(self):
         x = np.random.rand(100, 20)
         w = np.random.rand(10,10,20)
-        cs_dist = manhattan_distance(self.xp.array(x), self.xp.array(w), xp=self.xp)
+        w_flat = w.reshape(-1, w.shape[2])
+        cs_dist = manhattan_distance(self.xp.array(x), self.xp.array(w_flat), xp=self.xp)
         if self.xp.__name__ == 'cupy':
             cs_dist = cp.asnumpy(cs_dist)
         cs_dist = cs_dist.reshape((100,10,10))
