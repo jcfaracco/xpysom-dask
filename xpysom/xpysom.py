@@ -17,7 +17,7 @@ except:
     print("WARNING: CuPy could not be imported")
     default_xp = np
 
-from .distances import cosine_distance, manhattan_distance, euclidean_squared_distance, euclidean_squared_distance_part, euclidean_distance
+from .distances import DistanceFunction, euclidean_distance
 from .neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
 from .utils import find_cpu_cores, find_max_cuda_threads
 from .decays import linear_decay, asymptotic_decay, exponential_decay
@@ -200,19 +200,8 @@ class XPySom:
         self.neighborhood = neig_functions[neighborhood_function]
         self.neighborhood_func_name = neighborhood_function
 
-        distance_functions = {
-            'euclidean': euclidean_squared_distance_part,
-            'euclidean_no_opt': euclidean_squared_distance,
-            'manhattan': manhattan_distance,
-            'cosine': cosine_distance,
-        }
-
-        if activation_distance not in distance_functions:
-            msg = '%s not supported. Distances available: %s'
-            raise ValueError(msg % (activation_distance,
-                                    ', '.join(distance_functions.keys())))
-
-        self._activation_distance = distance_functions[activation_distance]
+        self._activation_distance_name = activation_distance
+        self._activation_distance = DistanceFunction(activation_distance, xp=self.xp)
 
         self._unravel_precomputed = self.xp.unravel_index(self.xp.arange(x*y, dtype=self.xp.int64), (x,y))
 
@@ -318,20 +307,11 @@ class XPySom:
         if len(x_gpu.shape) == 1:
             x_gpu = self.xp.expand_dims(x_gpu, axis=0)
 
-        if self._sq_weights_gpu is not None:
-            self._activation_map_gpu = self._activation_distance(
-                    x_gpu, 
-                    self._weights_gpu,
-                    self._sq_weights_gpu,
-                    xp=self.xp
-            )
-        else:
-            self._activation_map_gpu = self._activation_distance(
-                    x_gpu, 
-                    self._weights_gpu,
-                    xp=self.xp
-            )
-
+        self._activation_map_gpu = self._activation_distance(
+            x_gpu, 
+            self._weights_gpu,
+            self._sq_weights_gpu
+        )
 
     def _check_iteration_number(self, num_iteration):
         if num_iteration < 1:
@@ -474,11 +454,7 @@ class XPySom:
                     dtype=self.xp.float32
                 )
 
-            if self._activation_distance in [
-                    euclidean_squared_distance,
-                    euclidean_squared_distance_part,
-                    cosine_distance
-            ]:
+            if self._activation_distance.can_cache:
                 self._sq_weights_gpu = (
                     self.xp.power(
                         self._weights_gpu.reshape(
@@ -585,8 +561,8 @@ class XPySom:
             end = start + self._n_parallel
             if end > len(data_gpu):
                 end = len(data_gpu)
-            
-            distances.append(euclidean_distance(data_gpu[start:end], self._weights_gpu, xp=self.xp))
+            w_flat = self._weights_gpu.reshape(-1, self._weights_gpu.shape[2])
+            distances.append(euclidean_distance(data_gpu[start:end], w_flat, xp=self.xp))
         return self.xp.vstack(distances)
 
     def quantization_error(self, data):
@@ -781,6 +757,7 @@ class XPySom:
         # Remove the unpicklable entries.
         del state['xp']
         del state['neighborhood']
+        del state['_activation_distance']
         state['xp_name'] = self.xp.__name__
         return state
 
@@ -796,3 +773,4 @@ class XPySom:
             self.xp = default_xp
 
         self.neighborhood = self.get_neig_functions()[self.neighborhood_func_name]
+        self._activation_distance = DistanceFunction(self._activation_distance_name, self.xp)
