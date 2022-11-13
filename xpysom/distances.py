@@ -57,6 +57,54 @@ def cosine_distance(x, w, w_sq=None, xp=default_xp):
 
     return 1 - similarity
 
+def norm_p_power_distance_generic(x, w, p=2, xp=default_xp):
+    """Calculate norm-p distance raised to the power of p
+
+    This is just the summed differences raised to the power of p.
+    NB: p-th root is not calculated since it doesn't influence order.
+
+    NB: result shape is (N,X*Y)
+    """
+    return xp.sum(
+        xp.power(
+            xp.abs(x[:,xp.newaxis,:] - w[xp.newaxis,:,:]),
+            p
+        ),
+        axis=2
+    )
+
+def norm_p_power_distance_even(x, w,p=2, xp=default_xp):
+    """Calculate norm-p distance raised to the power of p for even p
+
+    This is an optimization of norm_p_power_distance_generic when p is even
+
+    NB: result shape is (N,X*Y)
+    """
+    if p % 2 != 0:
+        raise ValueError("p must be even")
+
+    acc = xp.zeros((len(x), len(w)))
+    k = 1
+    for e in range(p+1):
+        acc += (
+            (-1 if e % 2 == 1 else 1) * k *
+            xp.dot(x**(p-e), (w**e).T)
+        )
+        # next binomial coefficient
+        k = (k * (p - e)) // (e + 1)
+    return acc
+
+def norm_p_power_distance(x, w, p=2, xp=default_xp):
+    """Calculate norm-p distance raised to the power of p
+    This function chooses the fastest implementation depending on p
+
+    NB: result shape is (N,X*Y)
+    """
+    if p % 2 == 0:
+        return norm_p_power_distance_even(x, w, p, xp)
+    else:
+        return norm_p_power_distance_generic(x, w, p, xp)
+
 if _cupy_available:
     _manhattan_distance_kernel = cp.ReductionKernel(
         'T x, T w', # input params
@@ -92,12 +140,14 @@ def manhattan_distance(x, w, xp=default_xp):
         )
 
 class DistanceFunction:
-    def __init__(self, name, xp):
+    def __init__(self, name, kwargs, xp):
         distance_functions = {
             'euclidean': euclidean_squared_distance_part,
             'euclidean_no_opt': euclidean_squared_distance,
             'manhattan': manhattan_distance,
             'cosine': cosine_distance,
+            'norm_p': norm_p_power_distance,
+            'norm_p_no_opt': norm_p_power_distance_generic,
         }
 
         if name not in distance_functions:
@@ -105,7 +155,7 @@ class DistanceFunction:
             raise ValueError(msg % (name,
                                     ', '.join(distance_functions.keys())))
         
-        self.__kwargs = {'xp': xp}
+        self.__kwargs = {'xp': xp, **kwargs}
         self.__distance_function = distance_functions[name]
         self.can_cache = name in [
             'euclidean',

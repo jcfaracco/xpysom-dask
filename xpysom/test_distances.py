@@ -14,6 +14,7 @@ from .distances import (
     euclidean_distance,
     cosine_distance,
     manhattan_distance,
+    norm_p_power_distance,
 )
 
 def apply_distance(dist, x, y):
@@ -92,37 +93,56 @@ DISTANCES = [
     (
         euclidean_squared_distance_part,
         lambda vx, vy: -2 * np.dot(vx, vy) + np.dot(vy,vy),
+        {},
     ),
     (
         euclidean_squared_distance,
         lambda vx, vy: np.sum(np.power(vx-vy, 2)),
+        {},
     ),
     (
         euclidean_distance,
         lambda vx, vy: np.linalg.norm(vx - vy),
+        {},
     ),
     (
         cosine_distance,
         lambda vx, vy: 1 - np.nan_to_num(
             np.dot(vx, vy) / (np.linalg.norm(vx) * np.linalg.norm(vy))
         ),
+        {},
     ),
     (
         manhattan_distance,
-        lambda vx, vy: np.linalg.norm(vx - vy, ord=1),
+        lambda vx, vy: np.linalg.norm(vx-vy, ord=1),
+        {},
     ),
-    
+    (
+        norm_p_power_distance,
+        lambda vx, vy: np.sum(np.power(vx-vy, 2)),
+        {'p': 2},
+    ),
+    (
+        norm_p_power_distance,
+        lambda vx, vy: np.sum(np.power(np.abs(vx-vy), 3)),
+        {'p': 3},
+    ),
+    (
+        norm_p_power_distance,
+        lambda vx, vy: np.sum(np.power(np.abs(vx-vy), 4)),
+        {'p': 4},
+    ),
 ]
 
 @pytest.mark.parametrize('x,y', INPUTS)
 @pytest.mark.parametrize('xp', XPS)
-@pytest.mark.parametrize('dist,dist_simple', DISTANCES)
+@pytest.mark.parametrize('dist,dist_simple,dist_kwargs', DISTANCES)
 class TestDistances:
-    def test_distance(self, xp, dist, dist_simple, x, y):
+    def test_distance(self, xp, dist, dist_simple, dist_kwargs, x, y):
         x_a = xp.array(x)
         y_a = xp.array(y)
 
-        z_out = dist(x_a, y_a, xp=xp)
+        z_out = dist(x_a, y_a, **dist_kwargs, xp=xp)
         if xp.__name__ == 'cupy':
             z_out = xp.asnumpy(z_out)
 
