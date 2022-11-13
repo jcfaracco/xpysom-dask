@@ -9,7 +9,7 @@ except Exception as e:
 
 import pytest
 from .distances import (
-    euclidean_squared_distance_part, 
+    euclidean_squared_distance_part,
     euclidean_squared_distance,
     euclidean_distance,
     cosine_distance,
@@ -36,14 +36,14 @@ def int_to_binary_array(x, l):
 
 def get_inputs():
     inputs = []
-    for l in range(1, 5):
+    for l in range(1, 4):
         xys = []
         for xb in range(2**l):
             x = int_to_binary_array(xb, l)
             for yb in range(2**l):
                 y = int_to_binary_array(yb, l)
                 xys.append((x, y))
-    
+
         # all combinations with 1 item per array
         inputs += [([x], [y]) for x, y in xys]
 
@@ -79,9 +79,9 @@ def get_inputs():
 
     # some fuzzy inputs
     np.random.seed(0)
-    for n in (1, 10, 100):
-        for m in (1, 10, 100):
-            for l in (1, 10, 100):
+    for n in (2, 7):
+        for m in (3, 11):
+            for l in (5, 13):
                 x = np.random.rand(n, l).tolist()
                 y = np.random.rand(m, l).tolist()
                 inputs.append((x, y))
