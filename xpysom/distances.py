@@ -11,7 +11,7 @@ except:
 def euclidean_squared_distance_part(x, w, w_sq=None, xp=default_xp):
     """Calculate partial squared L2 distance
 
-    This function does not sum x**2 to the result since it's not needed to 
+    This function does not sum x**2 to the result since it's not needed to
     compute the best matching unit (it's not dependent on the neuron but
     it's a constant addition on the row).
 
@@ -116,28 +116,45 @@ if _cupy_available:
         'l1norm'    # kernel name
     )
 
-def manhattan_distance(x, w, xp=default_xp):
+def manhattan_distance_cuda(x, w, xp=default_xp):
+    """Calculate Manhattan distance
+
+    Uses a custom CUDA reduction kernel to improve speed 3x.
+
+    NB: result shape is (N,X*Y)
+    """
+
+    if xp.__name__ != 'cupy':
+        raise ValueError("This function only works with cupy")
+
+    return _manhattan_distance_kernel(
+        x[:,xp.newaxis,:],
+        w[xp.newaxis,:,:],
+        axis=2
+    )
+
+def manhattan_distance_no_opt(x, w, xp=default_xp):
     """Calculate Manhattan distance
 
     It is very slow (~10x) compared to euclidean distance
-    TODO: improve performance. Maybe a custom kernel is necessary
+
+    NB: result shape is (N,X*Y)
+    """
+    return norm_p_power_distance_generic(x, w, p=1, xp=xp)
+
+
+def manhattan_distance(x, w, xp=default_xp):
+    """Calculate Manhattan distance
+
+    Uses the improved CUDA version if using GPU
 
     NB: result shape is (N,X*Y)
     """
 
     if xp.__name__ == 'cupy':
-        return _manhattan_distance_kernel(
-            x[:,xp.newaxis,:], 
-            w[xp.newaxis,:,:], 
-            axis=2
-        )
+        return manhattan_distance_cuda(x, w, xp=xp)
     else:
-        return xp.linalg.norm(
-            x[:,xp.newaxis,:]-w[xp.newaxis,:,:], 
-            ord=1,
-            axis=2,
-        )
-        )
+        return manhattan_distance_no_opt(x, w, xp=xp)
 
 class DistanceFunction:
     def __init__(self, name, kwargs, xp):
@@ -145,6 +162,7 @@ class DistanceFunction:
             'euclidean': euclidean_squared_distance_part,
             'euclidean_no_opt': euclidean_squared_distance,
             'manhattan': manhattan_distance,
+            'manhattan_no_opt': manhattan_distance_no_opt,
             'cosine': cosine_distance,
             'norm_p': norm_p_power_distance,
             'norm_p_no_opt': norm_p_power_distance_generic,
@@ -154,7 +172,7 @@ class DistanceFunction:
             msg = '%s not supported. Distances available: %s'
             raise ValueError(msg % (name,
                                     ', '.join(distance_functions.keys())))
-        
+
         self.__kwargs = {'xp': xp, **kwargs}
         self.__distance_function = distance_functions[name]
         self.can_cache = name in [
