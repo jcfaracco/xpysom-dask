@@ -184,6 +184,6 @@ class DistanceFunction:
     def __call__(self, x, w, w_flat_sq=None):
         w_flat = w.reshape(-1, w.shape[2])
         if w_flat_sq is not None:
-            return self.__distance_function(x, w_flat, **self.__kwargs)
-        else:
             return self.__distance_function(x, w_flat, w_flat_sq, **self.__kwargs)
+        else:
+            return self.__distance_function(x, w_flat, **self.__kwargs)
