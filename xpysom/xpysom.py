@@ -535,14 +535,19 @@ class XPySom:
         else:
             return qnt
 
-
     def _quantization(self, data_gpu):
         """Assigns a code book (weights vector of the winning neuron)
         to each sample in data."""
         self._check_input_len(data_gpu)
-        winners_coords = self.xp.argmin(self._distance_from_weights(data_gpu), axis=1)
-        return self._weights_gpu[self.xp.unravel_index(winners_coords,
-                                           self._weights.shape[:2])]
+
+        quantized = []
+        for start in range(0, len(data_gpu), self._n_parallel):
+            end = start + self._n_parallel
+            winners_coords = self.xp.argmin(self._distance_from_weights(data_gpu[start:end]), axis=1)
+            unraveled_indexes = self.xp.unravel_index(winners_coords, self._weights.shape[:2])
+            quantized.append(self._weights_gpu[unraveled_indexes])
+
+        return self.xp.vstack(quantized)
 
     def distance_from_weights(self, data):
         """Returns a matrix d where d[i,j] is the euclidean distance between
