@@ -177,7 +177,6 @@ class DistanceFunction:
         self.__distance_function = distance_functions[name]
         self.can_cache = name in [
             'euclidean',
-            'euclidean_no_opt',
             'cosine',
         ]
 
