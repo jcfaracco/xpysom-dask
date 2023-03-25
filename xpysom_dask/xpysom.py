@@ -33,14 +33,14 @@ except:
     print("WARNING: Dask Arrays could not be imported")
     default_da = False
 
-from .distances import cosine_distance, manhattan_distance, euclidean_squared_distance, euclidean_squared_distance_part, euclidean_distance
+from .distances import DistanceFunction, euclidean_distance
 from .neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
 from .utils import find_cpu_cores, find_max_cuda_threads
 from .decays import linear_decay, asymptotic_decay, exponential_decay
 
 # In my machine it looks like these are the best performance/memory trade-off.
-# As a rule of thumb, executing more items at a time does not decrease 
-# performance but it may increase the memory footprint without providing 
+# As a rule of thumb, executing more items at a time does not decrease
+# performance but it may increase the memory footprint without providing
 # significant gains.
 DEFAULT_CPU_CORE_OVERSUBSCRIPTION = 500
 
@@ -70,12 +70,13 @@ def print_progress(t, T):
 
 
 class XPySom:
-    def __init__(self, x, y, input_len, 
-                 sigma=0, sigmaN=1, 
+    def __init__(self, x, y, input_len,
+                 sigma=0, sigmaN=1,
                  learning_rate=0.5, learning_rateN=0.01, decay_function='exponential',
-                 neighborhood_function='gaussian', std_coeff=0.5, 
-                 topology='rectangular', 
-                 activation_distance='euclidean', 
+                 neighborhood_function='gaussian', std_coeff=0.5,
+                 topology='rectangular',
+                 activation_distance='euclidean',
+                 activation_distance_kwargs={},
                  random_seed=None, n_parallel=0, compact_support=False,
                  xp=default_xp,
                  use_dask=False, dask_chunks='auto'):
@@ -126,22 +127,27 @@ class XPySom:
 
         activation_distance : string, optional (default='euclidean')
             Distance used to activate the map.
-            Possible values: 'euclidean', 'cosine', 'manhattan'
+            Possible values: 'euclidean', 'cosine', 'manhattan', 'norm_p'
+
+        activation_distance_kwargs : dict, optional (default={})
+            Pass additional argumets to distance function.
+            norm_p:
+                p: exponent of the norm-p distance
 
         random_seed : int, optional (default=None)
             Random seed to use.
 
         n_parallel : uint, optionam (default=#max_CUDA_threads or 500*#CPUcores)
-            Number of samples to be processed at a time. Setting a too low 
+            Number of samples to be processed at a time. Setting a too low
             value may drastically lower performance due to under-utilization,
-            setting a too high value increases memory usage without granting 
+            setting a too high value increases memory usage without granting
             any significant performance benefit.
 
         xp : numpy or cupy, optional (default=cupy if can be imported else numpy)
             Use numpy (CPU) or cupy (GPU) for computations.
-        
+
         std_coeff: float, optional (default=0.5)
-            Used to calculate gausssian exponent denominator: 
+            Used to calculate gausssian exponent denominator:
             d = 2*std_coeff**2*sigma**2
 
         compact_support: bool, optional (default=False)
@@ -185,7 +191,7 @@ class XPySom:
 
         # used to evaluate the neighborhood function
         self._neigx = self.xp.arange(x)
-        self._neigy = self.xp.arange(y)  
+        self._neigy = self.xp.arange(y)
 
         if topology not in ['hexagonal', 'rectangular']:
             msg = '%s not supported only hexagonal and rectangular available'
@@ -227,19 +233,9 @@ class XPySom:
         self.neighborhood = neig_functions[neighborhood_function]
         self.neighborhood_func_name = neighborhood_function
 
-        distance_functions = {
-            'euclidean': euclidean_squared_distance_part,
-            'euclidean_no_opt': euclidean_squared_distance,
-            'manhattan': manhattan_distance,
-            'cosine': cosine_distance,
-        }
-
-        if activation_distance not in distance_functions:
-            msg = '%s not supported. Distances available: %s'
-            raise ValueError(msg % (activation_distance,
-                                    ', '.join(distance_functions.keys())))
-
-        self._activation_distance = distance_functions[activation_distance]
+        self._activation_distance_name = activation_distance
+        self._activation_distance_kwargs = activation_distance_kwargs
+        self._activation_distance = DistanceFunction(activation_distance, activation_distance_kwargs, xp=self.xp)
 
         self._unravel_precomputed = self.xp.unravel_index(self.xp.arange(x*y, dtype=self.xp.int64), (x,y))
 
@@ -247,8 +243,8 @@ class XPySom:
             if self.xp.__name__ == 'cupy':
                 n_parallel = find_max_cuda_threads()
             else:
-                n_parallel = find_cpu_cores()*DEFAULT_CPU_CORE_OVERSUBSCRIPTION  
- 
+                n_parallel = find_cpu_cores()*DEFAULT_CPU_CORE_OVERSUBSCRIPTION
+
             if n_parallel == 0:
                 raise ValueError("n_parallel was not specified and could not be infered from system")
 
@@ -256,7 +252,6 @@ class XPySom:
 
         self._sq_weights_gpu = None
 
-    
     def get_neig_functions(self):
         """
         Returns a dictionary (func_name, prepared_func)
@@ -358,7 +353,6 @@ class XPySom:
                     xp=self.xp
             )
 
-
     def _check_iteration_number(self, num_iteration):
         if num_iteration < 1:
             raise ValueError('num_iteration must be > 1')
@@ -451,8 +445,8 @@ class XPySom:
 
     def _merge_updates(self, weights_gpu, numerator_gpu, denominator_gpu):
         """
-        Divides the numerator accumulator by the denominator accumulator 
-        to compute the new weights. 
+        Divides the numerator accumulator by the denominator accumulator
+        to compute the new weights.
         """
         return self.xp.where(
             denominator_gpu != 0,
@@ -532,11 +526,7 @@ class XPySom:
                     dtype=self.xp.float32
                 )
 
-            if self._activation_distance in [
-                    euclidean_squared_distance,
-                    euclidean_squared_distance_part,
-                    cosine_distance
-            ]:
+            if self._activation_distance.can_cache:
                 self._sq_weights_gpu = (
                     self.xp.power(
                         weights_gpu.reshape(
@@ -630,7 +620,7 @@ class XPySom:
     def quantization(self, data):
         """Assigns a code book (weights vector of the winning neuron)
         to each sample in data."""
-        
+
         data_gpu = self.xp.array(data)
         qnt = self._quantization(data_gpu, self.xp.array(self._weights))
 
@@ -639,14 +629,19 @@ class XPySom:
         else:
             return qnt
 
-
-    def _quantization(self, data_gpu, weights_gpu):
+    def _quantization(self, data_gpu):
         """Assigns a code book (weights vector of the winning neuron)
         to each sample in data."""
         self._check_input_len(data_gpu)
-        winners_coords = self.xp.argmin(self._distance_from_weights(data_gpu, weights_gpu), axis=1)
-        return weights_gpu[self.xp.unravel_index(winners_coords,
-                           self._weights.shape[:2])].copy()
+
+        quantized = []
+        for start in range(0, len(data_gpu), self._n_parallel):
+            end = start + self._n_parallel
+            winners_coords = self.xp.argmin(self._distance_from_weights(data_gpu[start:end]), axis=1)
+            unraveled_indexes = self.xp.unravel_index(winners_coords, self._weights.shape[:2])
+            quantized.append(self._weights_gpu[unraveled_indexes])
+
+        return self.xp.vstack(quantized)
 
     def distance_from_weights(self, data, weights_gpu):
         """Returns a matrix d where d[i,j] is the euclidean distance between
@@ -670,8 +665,8 @@ class XPySom:
             end = start + self._n_parallel
             if end > len(data_gpu):
                 end = len(data_gpu)
-
-            distances.append(euclidean_distance(data_gpu[start:end], weights, xp=self.xp))
+            w_flat = weights.reshape(-1, weights.shape[2])
+            distances.append(euclidean_distance(data_gpu[start:end], w_flat, xp=self.xp))
         return self.xp.vstack(distances)
 
     def quantization_error(self, data):
@@ -877,6 +872,7 @@ class XPySom:
         # Remove the unpicklable entries.
         del state['xp']
         del state['neighborhood']
+        del state['_activation_distance']
         state['xp_name'] = self.xp.__name__
         return state
 
@@ -892,3 +888,4 @@ class XPySom:
             self.xp = default_xp
 
         self.neighborhood = self.get_neig_functions()[self.neighborhood_func_name]
+        self._activation_distance = DistanceFunction(self._activation_distance_name, self._activation_distance_kwargs, self.xp)
