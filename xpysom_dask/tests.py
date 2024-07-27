@@ -11,9 +11,9 @@ except:
 
 from minisom import MiniSom
 
-from xpysom import XPySom
-from xpysom.distances import cosine_distance, manhattan_distance, euclidean_squared_distance
-from xpysom.neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
+from xpysom_dask import XPySom
+from xpysom_dask.distances import cosine_distance, manhattan_distance, euclidean_squared_distance
+from xpysom_dask.neighborhoods import gaussian_generic, gaussian_rect, mexican_hat_generic, mexican_hat_rect, bubble, triangle, prepare_neig_func
 
 import pickle
 import os

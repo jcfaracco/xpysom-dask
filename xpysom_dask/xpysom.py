@@ -629,7 +629,7 @@ class XPySom:
         else:
             return qnt
 
-    def _quantization(self, data_gpu):
+    def _quantization(self, data_gpu, weights_gpu):
         """Assigns a code book (weights vector of the winning neuron)
         to each sample in data."""
         self._check_input_len(data_gpu)
@@ -637,9 +637,10 @@ class XPySom:
         quantized = []
         for start in range(0, len(data_gpu), self._n_parallel):
             end = start + self._n_parallel
-            winners_coords = self.xp.argmin(self._distance_from_weights(data_gpu[start:end]), axis=1)
+            winners_coords = self.xp.argmin(self._distance_from_weights(data_gpu[start:end], weights_gpu), axis=1)
             unraveled_indexes = self.xp.unravel_index(winners_coords, self._weights.shape[:2])
-            quantized.append(self._weights_gpu[unraveled_indexes])
+            weights_gpu = self.xp.array(self._weights)
+            quantized.append(weights_gpu[unraveled_indexes])
 
         return self.xp.vstack(quantized)
 

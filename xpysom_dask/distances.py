@@ -35,7 +35,7 @@ def euclidean_distance(x, w, w_sq=None, xp=default_xp):
 
     NB: result shape is (N,X*Y)
     """
-    dist = xp.nan_to_num(euclidean_squared_distance(x, w, w_flat_sq, xp))
+    dist = xp.nan_to_num(euclidean_squared_distance(x, w, w_sq, xp))
     return xp.nan_to_num(
         xp.sqrt(
             euclidean_squared_distance(x, w, w_sq, xp)
@@ -181,8 +181,10 @@ class DistanceFunction:
             'cosine',
         ]
 
-    def __call__(self, x, w, w_flat_sq=None):
+    def __call__(self, x, w, w_flat_sq=None, xp=np):
         w_flat = w.reshape(-1, w.shape[2])
+
+        self.__kwargs['xp'] = xp
         if w_flat_sq is not None:
             return self.__distance_function(x, w_flat, w_flat_sq, **self.__kwargs)
         else:
