@@ -80,7 +80,7 @@ Differences with MiniSom
 Cite
 ----
 
-If you are using this project in your research, please cite the paper where XPySom-Dask.
+If you are using this project in your research, please cite the paper where XPySom-Dask was used.
 
 ```bibtex
 @inproceedings{dasf,
